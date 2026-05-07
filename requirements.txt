@@ -53,3 +53,7 @@ feedparser
 ddgs
 httpx
 trafilatura
+# DocumentGraph
+kuzu
+networkx
+python-igraph

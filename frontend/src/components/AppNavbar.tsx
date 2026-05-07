@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, User, Moon, Sun, Radar, ArrowLeft } from 'lucide-react';
+import { LogOut, User, Moon, Sun, ArrowLeft, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
@@ -19,6 +19,9 @@ const AppNavbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isSensingPage = location.pathname === '/sensing';
+  const isGraphPage = location.pathname.startsWith('/document-graph');
+  const threadMatch = location.pathname.match(/^\/dashboard\/threads\/([^/]+)/);
+  const currentThreadId = threadMatch ? threadMatch[1] : null;
 
   const handleLogout = () => {
     removeAuthToken();
@@ -40,7 +43,7 @@ const AppNavbar: React.FC = () => {
             draggable={false}
           />
           <h1 className="text-lg font-semibold">{PROJECT_NAME}</h1>
-          {isSensingPage ? (
+          {isSensingPage && (
             <Button
               variant="ghost"
               size="sm"
@@ -50,15 +53,27 @@ const AppNavbar: React.FC = () => {
               <ArrowLeft className="w-4 h-4 mr-1.5" />
               Knowledge Forge
             </Button>
-          ) : (
+          )}
+          {isGraphPage && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate('/sensing')}
+              onClick={() => navigate('/dashboard')}
               className="ml-4 text-muted-foreground hover:text-foreground"
             >
-              <Radar className="w-4 h-4 mr-1.5" />
-              Tech Sensing
+              <ArrowLeft className="w-4 h-4 mr-1.5" />
+              Knowledge Forge
+            </Button>
+          )}
+          {!isGraphPage && !isSensingPage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(currentThreadId ? `/document-graph/${currentThreadId}` : '/document-graph')}
+              className="ml-4 text-muted-foreground hover:text-foreground"
+            >
+              <Network className="w-4 h-4 mr-1.5" />
+              Document Graph
             </Button>
           )}
         </div>

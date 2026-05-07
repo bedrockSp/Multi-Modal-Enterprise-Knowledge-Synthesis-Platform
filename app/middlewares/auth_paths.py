@@ -17,4 +17,6 @@ auth_paths = [
     "/excel-skill",
     "/settings",
     "/sensing",
+    "/graph",
+    "/graphs",
 ]
