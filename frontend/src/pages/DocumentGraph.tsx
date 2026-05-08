@@ -334,7 +334,7 @@ const DocumentGraphPage = () => {
 
   if (!routeThreadId) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="h-screen flex flex-col overflow-hidden">
         <AppNavbar />
         <div className="px-6 py-6 flex-1 overflow-auto">
           <div className="max-w-3xl mx-auto">
@@ -361,7 +361,7 @@ const DocumentGraphPage = () => {
   const hasGraph = graph && graph.nodes.length > 0;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       <AppNavbar />
       <div className="px-4 py-3 border-b flex items-center gap-3">
         <Network className="w-4 h-4 text-muted-foreground" />

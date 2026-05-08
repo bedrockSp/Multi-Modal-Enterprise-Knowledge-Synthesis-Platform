@@ -206,6 +206,10 @@ const DocumentGraphView = ({ graph, onSelectEntity, onSelectEdge }: DocumentGrap
           labelRenderedSizeThreshold: 8,
           minCameraRatio: 0.05,
           maxCameraRatio: 4,
+          // Sigma throws if it mounts before the parent has a resolved pixel
+          // height. The page now uses h-screen so this should not fire, but
+          // keep it on as a guard against transient first-render races.
+          allowInvalidContainer: true,
         }}
       >
         <GraphLoader graph={graph} />
