@@ -25,14 +25,7 @@ import os
 import shutil
 from typing import Optional, Protocol
 
-from core.document_graph.models import (
-    ChunkRef,
-    Community,
-    DocumentGraph,
-    Entity,
-    GraphMetadata,
-    Relation,
-)
+from core.document_graph.models import DocumentGraph
 
 
 def _graph_dir(user_id: str) -> str:
@@ -78,12 +71,15 @@ class KuzuGraphStore:
         conn = kuzu.Connection(db)
         # Create schema if absent. Kuzu raises on duplicate table creation, so
         # swallow and continue — schema is idempotent in practice.
+        # NOTE: Kuzu reserves 'profile' (used by Cypher's PROFILE statement) so we
+        # store the entity bio under the column name `bio`. The JSON sidecar
+        # still uses `profile` for frontend compatibility.
         ddl = [
             (
                 "CREATE NODE TABLE IF NOT EXISTS Entity("
                 "id STRING, label STRING, type STRING, aliases STRING[], "
                 "frequency INT64, doc_count INT64, community_id INT64, "
-                "profile STRING, provenance STRING, "
+                "bio STRING, provenance STRING, "
                 "PRIMARY KEY (id))"
             ),
             (
@@ -122,22 +118,27 @@ class KuzuGraphStore:
         db, conn = cls._connect(graph.metadata.user_id, graph.metadata.thread_id)
 
         for e in graph.nodes:
-            conn.execute(
-                "CREATE (n:Entity {id: $id, label: $label, type: $type, "
-                "aliases: $aliases, frequency: $frequency, doc_count: $doc_count, "
-                "community_id: $community_id, profile: $profile, provenance: $provenance})",
-                {
-                    "id": e.id,
-                    "label": e.label,
-                    "type": e.type,
-                    "aliases": e.aliases,
-                    "frequency": e.frequency,
-                    "doc_count": e.doc_count,
-                    "community_id": e.community_id if e.community_id is not None else -1,
-                    "profile": e.profile,
-                    "provenance": json.dumps([p.model_dump() for p in e.provenance]),
-                },
-            )
+            try:
+                conn.execute(
+                    "CREATE (n:Entity {id: $id, label: $label, type: $type, "
+                    "aliases: $aliases, frequency: $frequency, doc_count: $doc_count, "
+                    "community_id: $community_id, bio: $bio, provenance: $provenance})",
+                    {
+                        "id": e.id,
+                        "label": e.label,
+                        "type": e.type,
+                        "aliases": e.aliases,
+                        "frequency": e.frequency,
+                        "doc_count": e.doc_count,
+                        "community_id": e.community_id if e.community_id is not None else -1,
+                        "bio": e.profile,
+                        "provenance": json.dumps([p.model_dump() for p in e.provenance]),
+                    },
+                )
+            except Exception as ex:
+                # One bad row shouldn't kill the whole graph — log and continue.
+                # The JSON sidecar still gets written below so the frontend works.
+                print(f"[DocumentGraph][kuzu] entity insert failed for {e.id}: {ex}")
 
         for c in graph.communities:
             conn.execute(
