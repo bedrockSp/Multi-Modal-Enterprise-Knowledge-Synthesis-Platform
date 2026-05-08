@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     QUERY_URL: str
     VISION_URL: str
     MAIN_MODEL: str
+    VLM_MODEL: str = "qwen3.5:9b"  # Override in .env to match MAIN_MODEL when both should share one Ollama instance
     REMOTE_GPU: bool = False
     USE_VISION_MODEL: bool = True  # VLM runs on every page/slide (PDF, DOCX, PPTX). Set False in .env to disable.
     LOCAL_BASE_URL: str = "http://localhost"

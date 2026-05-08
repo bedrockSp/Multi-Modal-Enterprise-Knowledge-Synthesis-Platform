@@ -18,9 +18,21 @@ import httpx
 from PIL import Image
 
 from core.config import settings
-from core.constants import PORT2, VLM_MODEL
+from core.constants import MAIN_MODEL, PORT1, PORT2, VLM_MODEL
 
 LOCAL_BASE_URL = settings.LOCAL_BASE_URL
+
+
+def _effective_vlm_port(requested_port: int) -> int:
+    """
+    When MAIN_MODEL and VLM_MODEL are identical, both calls hit the same Ollama
+    weights — running them on separate ports just loads the model twice and
+    doubles VRAM. Collapse to PORT1 in that case so the main model and the VLM
+    share one instance. When models differ, honour the requested port.
+    """
+    if MAIN_MODEL == VLM_MODEL and requested_port != PORT1:
+        return PORT1
+    return requested_port
 
 # Max image dimension (pixels) for VLM input — smaller images process faster and more reliably on 8B VLMs
 VLM_MAX_IMAGE_DIM = 1280
@@ -123,6 +135,7 @@ async def vlm_parse_slide(
         start_time = time.time()
         image_b64 = _encode_image_base64(image_input)
 
+        port = _effective_vlm_port(port)
         url = f"{LOCAL_BASE_URL}:{port}/api/chat"
 
         if custom_prompt:

@@ -110,7 +110,7 @@ GRAPH_COMMUNITY_BATCH_SIZE = 8           # Communities named per LLM call in Pha
 GRAPH_MAX_NODES = 5000                   # Hard ceiling — truncate by frequency above this
 
 IMAGE_PARSER_LLM = "gemma3:12b"
-VLM_MODEL = "qwen3.5:9b"  # Vision Language Model for slide/complex PDF extraction
+VLM_MODEL = settings.VLM_MODEL  # Vision Language Model for slide/complex PDF extraction (configurable via .env)
 # Fallback LLM models
 # Used if SWITCHES["FALLBACK_TO_GEMINI"] = True
 FALLBACK_GEMINI_MODEL = "gemini-2.5-flash"
