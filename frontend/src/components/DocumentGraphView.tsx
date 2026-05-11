@@ -10,7 +10,7 @@
 
 import { SigmaContainer, useLoadGraph, useRegisterEvents, useSigma } from '@react-sigma/core';
 import '@react-sigma/core/lib/react-sigma.min.css';
-import Graph from 'graphology';
+import { MultiDirectedGraph } from 'graphology';
 import forceAtlas2 from 'graphology-layout-forceatlas2';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -40,8 +40,8 @@ interface DocumentGraphViewProps {
   onSelectEdge?: (edge: GraphRelation) => void;
 }
 
-const buildGraphology = (graph: DocumentGraph): Graph => {
-  const g = new Graph({ multi: true, type: 'directed' });
+const buildGraphology = (graph: DocumentGraph): MultiDirectedGraph => {
+  const g = new MultiDirectedGraph();
 
   graph.nodes.forEach((entity) => {
     // Node size scales with frequency, log-bounded so high-frequency entities
@@ -58,8 +58,16 @@ const buildGraphology = (graph: DocumentGraph): Graph => {
     });
   });
 
+  // Dedupe by (source, target, predicate) — backend extractors can produce the
+  // same fact twice when the LLM and the triple-store both surface it.
+  // Multiple edges with *different* predicates between the same pair are real
+  // signal and stay.
+  const seen = new Set<string>();
   graph.edges.forEach((edge, i) => {
     if (!g.hasNode(edge.source_id) || !g.hasNode(edge.target_id)) return;
+    const key = `${edge.source_id}|${edge.target_id}|${edge.predicate}`;
+    if (seen.has(key)) return;
+    seen.add(key);
     g.addEdgeWithKey(`e${i}`, edge.source_id, edge.target_id, {
       label: edge.predicate,
       size: Math.max(0.5, edge.confidence * 1.6),
