@@ -58,22 +58,36 @@ const buildGraphology = (graph: DocumentGraph): MultiDirectedGraph => {
     });
   });
 
-  // Dedupe by (source, target, predicate) — backend extractors can produce the
-  // same fact twice when the LLM and the triple-store both surface it.
-  // Multiple edges with *different* predicates between the same pair are real
-  // signal and stay.
-  const seen = new Set<string>();
-  graph.edges.forEach((edge, i) => {
+  // Collapse to one edge per (source, target) pair. The viz can only render
+  // a single arrow per pair anyway (parallel arrows overlap visually), and
+  // this avoids depending on Graphology's multi-graph semantics altogether.
+  // Distinct predicates between the same nodes are joined in the label;
+  // the full underlying edge list is preserved on the attrs for click-through.
+  const groups = new Map<string, GraphRelation[]>();
+  graph.edges.forEach((edge) => {
     if (!g.hasNode(edge.source_id) || !g.hasNode(edge.target_id)) return;
-    const key = `${edge.source_id}|${edge.target_id}|${edge.predicate}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    g.addEdgeWithKey(`e${i}`, edge.source_id, edge.target_id, {
-      label: edge.predicate,
-      size: Math.max(0.5, edge.confidence * 1.6),
+    const key = `${edge.source_id}|${edge.target_id}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(edge);
+    else groups.set(key, [edge]);
+  });
+
+  let edgeIdx = 0;
+  groups.forEach((bucket, key) => {
+    const [src, tgt] = key.split('|');
+    const primary = bucket.reduce(
+      (best, e) => (e.confidence > best.confidence ? e : best),
+      bucket[0],
+    );
+    const predicates = Array.from(new Set(bucket.map((e) => e.predicate)));
+    const labelText = predicates.length === 1 ? predicates[0] : predicates.join(' / ');
+    g.addEdgeWithKey(`e${edgeIdx++}`, src, tgt, {
+      label: labelText,
+      size: Math.max(0.5, primary.confidence * 1.6),
       color: '#cbd5e1',
       type: 'arrow',
-      edge,
+      edge: primary,
+      allEdges: bucket,
     });
   });
 
