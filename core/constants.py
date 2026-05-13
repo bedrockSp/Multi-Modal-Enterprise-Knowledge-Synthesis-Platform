@@ -24,6 +24,7 @@ SWITCHES = {
     "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
     "TECH_SENSING": True,  # GenAI Tech Sensing — automated technology radar report generation
     "DOCUMENT_GRAPH": True,  # DocumentGraph — corpus-level knowledge graph with Sigma.js viz
+    "RATE_LIMIT_INTERNAL": True,  # Apply 3-call-per-60s rate limit to INTERNAL API. Set False to disable when quota allows.
 }
 
 # GLM-OCR Configuration

@@ -332,7 +332,8 @@ CRITICAL OUTPUT RULES:
             # Retry blank responses within the same attempt (up to 2 tries)
             for blank_retry in range(2):
                 try:
-                    await _internal_rate_limiter.acquire()
+                    if SWITCHES.get("RATE_LIMIT_INTERNAL", True):
+                        await _internal_rate_limiter.acquire()
                     print("Trying INTERNAL API...")
                     internal_llm = INTERNALLLM(
                         model=settings.INTERNAL_MODEL_ID,
