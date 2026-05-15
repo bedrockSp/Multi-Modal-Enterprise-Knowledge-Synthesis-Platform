@@ -1,7 +1,7 @@
 # Windows CPU-only requirements. Mirrors requirements.txt but:
 #   * pulls torch from the CPU wheel index (no NVIDIA runtime libs)
-#   * drops python-igraph (no Windows wheels; NetworkX fallback in
-#     core/document_graph/phases/communities.py handles community detection)
+#   * drops the DocumentGraph stack (kuzu, networkx, python-igraph) —
+#     the knowledge-graph feature is not built on the Windows CPU profile
 #
 # Install with:
 #   pip install -r requirements-windows-cpu.txt
@@ -65,6 +65,3 @@ feedparser
 ddgs
 httpx
 trafilatura
-# DocumentGraph (python-igraph omitted — Windows wheels unreliable; NetworkX fallback used)
-kuzu
-networkx

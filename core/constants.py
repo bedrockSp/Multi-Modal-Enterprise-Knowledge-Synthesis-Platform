@@ -27,7 +27,6 @@ SWITCHES = {
     "USE_VLM_FOR_ANSWER": True,  # Query-time VLM: render referenced page/slide/figure and answer visually
     "DISABLE_THINKING": True,  # Disable LLM thinking mode (think=false) for faster inference
     "TECH_SENSING": True,  # GenAI Tech Sensing — automated technology radar report generation
-    "DOCUMENT_GRAPH": True,  # DocumentGraph — corpus-level knowledge graph with Sigma.js viz
     "RATE_LIMIT_INTERNAL": True,  # Apply 3-call-per-60s rate limit to INTERNAL API. Set False to disable when quota allows.
 }
 
@@ -81,8 +80,6 @@ GPU_STRATEGIC_ANALYSIS_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_TECHNICAL_ANALYSIS_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)
 GPU_EVALUATOR_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # CRAG evaluator
 GPU_HYDE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # HyDE hypothesis generation
-GPU_ENTITY_PROFILE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Entity profile generation
-GPU_TRIPLE_EXTRACTION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Triple extraction
 
 # Document Creator LLM configurations
 GPU_DOC_OUTLINE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Outline generation
@@ -98,20 +95,6 @@ GPU_NLP_THEME_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Chunked NLP th
 # Tech Sensing LLM configurations
 GPU_SENSING_CLASSIFY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Article classification
 GPU_SENSING_REPORT_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Report generation
-
-# DocumentGraph LLM configurations
-GPU_GRAPH_RELATION_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)  # Phase 5: relation gap-fill
-GPU_GRAPH_DEDUPE_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1)    # Phase 4: ambiguous merge judgments
-GPU_GRAPH_COMMUNITY_LLM = GPULLMConfig(model=MAIN_MODEL, port=PORT1) # Phase 8: community naming + summary
-
-# DocumentGraph tuning
-GRAPH_DEDUPE_SIM_THRESHOLD = 0.92        # Cosine similarity above which entities auto-merge
-GRAPH_DEDUPE_AMBIGUOUS_LO = 0.78         # Lower bound for "ambiguous" range that goes to LLM judge
-GRAPH_MIN_ENTITY_FREQ = 2                # Drop singletons (entities mentioned only once)
-GRAPH_MIN_EDGE_CONFIDENCE = 0.35         # Prune edges below this confidence
-GRAPH_RELATION_BATCH_CHUNKS = 6          # Chunks per LLM call in Phase 5
-GRAPH_COMMUNITY_BATCH_SIZE = 8           # Communities named per LLM call in Phase 8
-GRAPH_MAX_NODES = 5000                   # Hard ceiling — truncate by frequency above this
 
 IMAGE_PARSER_LLM = "gemma3:12b"
 VLM_MODEL = settings.VLM_MODEL  # Vision Language Model for slide/complex PDF extraction (configurable via .env)

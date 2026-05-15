@@ -19,7 +19,6 @@ import NotFound from "./pages/NotFound";
 import SimHome from "./pages/SimHome";
 import RequireAuth from "./lib/RequireAuth";
 import TechSensing from "./pages/TechSensing";
-import DocumentGraphPage from "./pages/DocumentGraph";
 
 const queryClient = new QueryClient();
 
@@ -82,22 +81,6 @@ const App = () => {
                 }
               />
               <Route path="/dashboard/sensing" element={<Navigate to="/sensing" replace />} />
-              <Route
-                path="/document-graph"
-                element={
-                  <RequireAuth>
-                    <DocumentGraphPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/document-graph/:threadId"
-                element={
-                  <RequireAuth>
-                    <DocumentGraphPage />
-                  </RequireAuth>
-                }
-              />
               {SIM_PAGE_ENABLED && (
                 <Route
                   path="/sim"

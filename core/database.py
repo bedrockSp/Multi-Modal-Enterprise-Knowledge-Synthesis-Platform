@@ -154,34 +154,3 @@ except Exception as e:
     print("Error creating collection:", e)
 
 
-# DocumentGraph metadata — body of the graph lives in Kuzu/NetworkX on disk;
-# this collection only tracks status + counts for fast listing.
-document_graph_schema = {
-    "$jsonSchema": {
-        "bsonType": "object",
-        "required": ["user_id", "thread_id", "status"],
-        "properties": {
-            "user_id": {"bsonType": "string"},
-            "thread_id": {"bsonType": "string"},
-            "status": {"enum": ["pending", "building", "ready", "failed"]},
-            "node_count": {"bsonType": ["int", "long"]},
-            "edge_count": {"bsonType": ["int", "long"]},
-            "community_count": {"bsonType": ["int", "long"]},
-            "doc_count": {"bsonType": ["int", "long"]},
-            "built_at": {"bsonType": ["date", "null"]},
-            "created_at": {"bsonType": "date"},
-            "updated_at": {"bsonType": "date"},
-            "error": {"bsonType": "string"},
-        },
-    }
-}
-
-
-try:
-    db.create_collection("document_graphs", validator=document_graph_schema)
-    db.document_graphs.create_index([("user_id", 1), ("thread_id", 1)], unique=True)
-    print("Collection 'document_graphs' created with schema validation.")
-except CollectionInvalid:
-    print("Collection 'document_graphs' already exists.")
-except Exception as e:
-    print("Error creating document_graphs collection:", e)
