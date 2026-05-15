@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 import time
 from typing import Optional
 
@@ -24,12 +25,18 @@ if EASYOCR_GPU:
     try:
         import torch
 
-        torch.backends.cudnn.benchmark = True
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = True
     except Exception:
         pass
 
-# Optional for Windows if Tesseract throws errors:
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# On Windows, pytesseract auto-detects the binary only if it's on PATH. The
+# UB-Mannheim installer does not add itself to PATH by default, so we point
+# pytesseract at the standard install path when present.
+if sys.platform == "win32" and not pytesseract.pytesseract.tesseract_cmd.endswith(".exe"):
+    _default_tesseract = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    if os.path.isfile(_default_tesseract):
+        pytesseract.pytesseract.tesseract_cmd = _default_tesseract
 
 _EASYOCR_SEMAPHORE = None
 _EASYOCR_SEMAPHORE_LOCK = asyncio.Lock()

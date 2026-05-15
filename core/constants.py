@@ -1,6 +1,10 @@
 from core.config import settings
 from core.models.gpu_config import GPULLMConfig
 
+# CPU mode is inferred from the EasyOCR GPU flag — it's the most accurate
+# user-supplied signal (REMOTE_GPU is about an HTTP endpoint, not the local box).
+_CPU_MODE = not settings.EASYOCR_GPU
+
 # SETTINGS
 SWITCHES = {
     "MIND_MAP": False,  # For long documents, mind map will be better if SUMMARIZATION = True
@@ -29,7 +33,7 @@ SWITCHES = {
 
 # GLM-OCR Configuration
 GLM_OCR_MODEL = "glm-ocr-32k"  # Custom Modelfile: 32K context, 8K output (see core/parsers/Modelfile.glm-ocr)
-GLM_OCR_WORKERS = 3  # Max concurrent GLM-OCR inferences (VRAM-aware)
+GLM_OCR_WORKERS = 3 if not _CPU_MODE else 1  # Max concurrent GLM-OCR inferences (VRAM-aware)
 
 CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 
@@ -37,15 +41,14 @@ CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 MAX_TOTAL_CHUNKS = 200  # Coverage over speed — MapReduce handles context overflow
 
 
-EASYOCR_WORKERS = (
-    10  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)
-)
-TESSERACT_WORKERS = (
-    50  # Number of parallel workers for Tesseract OCR (adjust based on your CPU power)
-)
-EASYOCR_GPU = (
-    True  # GPU mode: ~4-7x faster OCR, uses only ~200MB VRAM (negligible on 48GB)
-)
+import os as _os
+
+EASYOCR_GPU = settings.EASYOCR_GPU
+
+# On CPU, 10 concurrent EasyOCR readers thrash the cache and saturate RAM;
+# 50 Tesseract workers would oversubscribe by 10-25x on a typical laptop.
+EASYOCR_WORKERS = 10 if not _CPU_MODE else 2
+TESSERACT_WORKERS = 50 if not _CPU_MODE else max(2, (_os.cpu_count() or 4) // 2)
 
 PORT1 = 11434  # Ollama instance 1 — gpt-oss:20b (query answering)
 PORT2 = 11435  # Ollama instance 2 — VLM (document processing, no queue contention with queries)

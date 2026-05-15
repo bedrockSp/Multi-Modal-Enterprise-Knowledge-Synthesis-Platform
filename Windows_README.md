@@ -1,5 +1,37 @@
 # Multi-Modal-Enterprise-Knowledge-Synthesis-Platform
 
+# Windows CPU Quick Start
+
+If you're on a Windows box without an NVIDIA GPU, use the CPU profile. After installing the prereqs below (Python 3.11, Node 22, MongoDB, Tesseract, Ollama for Windows):
+
+```powershell
+# from the repo root
+.\setup.ps1 all        # creates venv, installs CPU requirements, pulls models, starts Ollama
+.\setup.ps1 backend    # in one terminal
+.\setup.ps1 frontend   # in another terminal
+```
+
+`setup.ps1` has individual subcommands too: `venv`, `set-models`, `ollama`, `ollama-stop`, `backend`, `frontend`.
+
+### What the CPU profile does
+
+- Installs `torch` from the CPU wheel index (`requirements-windows-cpu.txt`) — no CUDA libs are downloaded.
+- Skips `python-igraph` (no Windows wheels); the codebase falls back to NetworkX for community detection automatically.
+- Defaults `EMBEDDING_DEVICE=cpu`, `CROSS_ENCODER_DEVICE=cpu`, `EASYOCR_GPU=false` in `.env` (see `.env.example`).
+- Lowers OCR worker counts to laptop-safe values (EasyOCR: 2, Tesseract: half of `os.cpu_count()`, GLM-OCR: 1).
+- Pulls `qwen2.5:7b` instead of the default `gpt-oss:20b` — the 20B model is unusably slow on most CPUs. Set `MAIN_MODEL=qwen2.5:7b` in your `.env` to match.
+- Auto-detects Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`.
+
+### Performance expectations on CPU
+
+OCR is ~5-10× slower, embedding ~10× slower, cross-encoder rerank ~4-9× slower than the GPU path. Ingestion of a 50-page PDF can take several minutes. Queries should still respond within ~30s for a 7B model on a modern CPU.
+
+### If you have a CUDA GPU on Windows
+
+Skip this section and use `requirements.txt` as usual; set `EMBEDDING_DEVICE=auto` (default), `EASYOCR_GPU=true`, and keep `MAIN_MODEL=gpt-oss:20b-50k-8k`.
+
+---
+
 # Prerequisites
 
 - **Node.js**

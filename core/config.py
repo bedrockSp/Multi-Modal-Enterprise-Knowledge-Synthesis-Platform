@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     INTERNAL_MODEL_ID: str = ""
     USE_INTERNAL: bool = False  # Set to True in .env to enable INTERNAL API
 
+    # CPU / Windows mode — device selection for ML components.
+    # "auto" picks cuda when torch.cuda.is_available() else cpu. Explicit "cpu" or
+    # "cuda" forces the device regardless of detection (useful if a stray CUDA
+    # torch wheel was installed on a CPU-only box).
+    EMBEDDING_DEVICE: str = "auto"
+    CROSS_ENCODER_DEVICE: str = "auto"
+    EASYOCR_GPU: bool = False  # True for ~4-7x faster OCR on NVIDIA GPU
+
     class Config:
         env_file = ".env"
         extra = "allow"
