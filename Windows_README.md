@@ -2,16 +2,31 @@
 
 # Windows CPU Quick Start
 
-If you're on a Windows box without an NVIDIA GPU, use the CPU profile. After installing the prereqs below (Python 3.11, Node 22, MongoDB, Tesseract, Ollama for Windows):
+If you're on a Windows box without an NVIDIA GPU, use the CPU profile. After installing the prereqs below (**Python 3.11**, Node 22, MongoDB, Tesseract, Ollama for Windows):
 
 ```powershell
 # from the repo root
-.\setup.ps1 all        # creates venv, installs CPU requirements, pulls models, starts Ollama
+.\setup.ps1 all        # creates venv, installs CPU requirements, pulls models, pre-warms HF cache, starts Ollama
 .\setup.ps1 backend    # in one terminal
 .\setup.ps1 frontend   # in another terminal
 ```
 
-`setup.ps1` has individual subcommands too: `venv`, `set-models`, `ollama`, `ollama-stop`, `backend`, `frontend`.
+`setup.ps1` has individual subcommands too: `venv`, `set-models`, `ollama`, `ollama-stop`, `doctor`, `backend`, `frontend`.
+
+### Python 3.11 is required, not 3.12+
+
+Several ML dependencies (sentence-transformers, easyocr, torch combos) don't ship wheels for Python 3.12, 3.13, or 3.14 yet. `setup.ps1` detects 3.11 via the Windows Python launcher (`py -3.11`). If you previously created `virtualEnv\` with a newer Python, delete the folder and re-run `.\setup.ps1 venv`.
+
+### Corporate network / SSL certificate errors
+
+If you hit `[SSL: CERTIFICATE_VERIFY_FAILED]` when models download from HuggingFace, your corporate proxy is inspecting HTTPS with a custom CA that Python's bundled certifi doesn't trust. The CPU requirements include [`pip-system-certs`](https://pypi.org/project/pip-system-certs/) which patches Python's SSL stack to use the Windows certificate store (where corporate CAs are installed). Make sure it's installed in the venv that runs `backend.py`:
+
+```powershell
+.\virtualEnv\Scripts\python.exe -m pip install pip-system-certs
+.\setup.ps1 doctor    # pre-downloads embedding + cross-encoder models
+```
+
+`doctor` triggers an explicit, one-time HuggingFace download so the first `backend.py` boot doesn't crash on a model that hasn't been cached yet. The embedding model loads at module import time, so a failed download is a fatal startup error.
 
 ### What the CPU profile does
 

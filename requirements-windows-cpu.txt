@@ -9,6 +9,10 @@
 # If pip already cached a CUDA torch, uninstall first:
 #   pip uninstall -y torch && pip install -r requirements-windows-cpu.txt
 
+# Windows-only: patch Python's SSL to use the Windows certificate store so
+# corporate proxy CAs (Samsung VM, Zscaler, etc.) are trusted when downloading
+# HuggingFace models. Must be installed in the same venv that runs backend.py.
+pip-system-certs ; sys_platform == "win32"
 bcrypt
 chromadb
 fastapi
