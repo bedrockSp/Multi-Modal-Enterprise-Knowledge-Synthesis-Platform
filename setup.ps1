@@ -27,10 +27,81 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
 
+function Test-Python311Available {
+    # Returns $true if py -3.11 OR python3.11 resolves to a working Python 3.11.
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        try {
+            $null = & py -3.11 --version 2>&1
+            if ($LASTEXITCODE -eq 0) { return $true }
+        } catch {}
+    }
+    if (Get-Command python3.11 -ErrorAction SilentlyContinue) {
+        try {
+            $v = & python3.11 --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $v -match "3\.11\.") { return $true }
+        } catch {}
+    }
+    return $false
+}
+
+function Install-Python311 {
+    # Idempotent: only acts when 3.11 is not already installed. Per-user
+    # install so no admin prompt, no PATH override (your existing 'python'
+    # stays put), but the py launcher picks up 3.11 via the registry so
+    # 'py -3.11' starts working immediately.
+    if (Test-Python311Available) { return }
+
+    $version = "3.11.9"
+    $url = "https://www.python.org/ftp/python/$version/python-$version-amd64.exe"
+    $installer = Join-Path $env:TEMP "python-$version-amd64.exe"
+
+    Write-Host "Python 3.11 not found. Downloading installer..."
+    Write-Host "  URL:    $url"
+    Write-Host "  Target: $installer"
+    try {
+        # Invoke-WebRequest uses .NET HttpWebRequest which already trusts the
+        # Windows certificate store - works behind corporate SSL inspection
+        # without any extra setup. Suppressing the inline progress bar makes
+        # the download ~10x faster on PS 5.1.
+        $oldPref = $ProgressPreference
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
+        $ProgressPreference = $oldPref
+    } catch {
+        throw "Failed to download Python 3.11 installer: $_`nIf you are behind a proxy that blocks python.org, download manually from $url and run with: $installer /passive InstallAllUsers=0 PrependPath=0 Include_launcher=1"
+    }
+
+    Write-Host "Installing Python $version per-user (no admin, no PATH override)..."
+    $installArgs = @(
+        "/passive",
+        "InstallAllUsers=0",
+        "PrependPath=0",
+        "Include_launcher=1",
+        "AssociateFiles=0",
+        "Shortcuts=0",
+        "Include_test=0",
+        "Include_doc=0",
+        "Include_dev=0",
+        "Include_debug=0",
+        "Include_symbols=0",
+        "SimpleInstall=1"
+    )
+    $proc = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+    if ($proc.ExitCode -ne 0) {
+        throw "Python 3.11 installer exited with code $($proc.ExitCode). Try running '$installer' manually."
+    }
+    Remove-Item $installer -Force -ErrorAction SilentlyContinue
+
+    if (-not (Test-Python311Available)) {
+        throw "Python 3.11 installer reported success but 'py -3.11' still does not resolve. Close and reopen PowerShell, then re-run '.\setup.ps1 venv'."
+    }
+    Write-Host "Python 3.11 installed successfully."
+}
+
 function Resolve-Python311 {
     # Prefer the Windows Python launcher 'py -3.11' - it knows about all
-    # installed Python versions and is the canonical way to pick one. Fall back
-    # to python3.11 on PATH, then to whatever 'python' is, with a version warning.
+    # installed Python versions and is the canonical way to pick one. Fall
+    # back to python3.11 on PATH if the launcher is missing.
     if (Get-Command py -ErrorAction SilentlyContinue) {
         try {
             $null = & py -3.11 --version 2>&1
@@ -38,15 +109,11 @@ function Resolve-Python311 {
         } catch {}
     }
     if (Get-Command python3.11 -ErrorAction SilentlyContinue) { return @("python3.11") }
-    $pyVer = & python --version 2>&1
-    if ($pyVer -notmatch "3\.11\.") {
-        Write-Warning "Python 3.11 not found. Falling back to: $pyVer"
-        Write-Warning "Some ML deps may fail to install. Install 3.11 from python.org and re-run."
-    }
-    return @("python")
+    throw "Python 3.11 not found even after install. Restart your shell and re-run '.\setup.ps1 venv'."
 }
 
 function Invoke-Venv {
+    Install-Python311  # idempotent; no-op when 3.11 already present
     if (-not (Test-Path "$scriptRoot\virtualEnv")) {
         $pyCmd = Resolve-Python311
         Write-Host "Creating virtualEnv with: $($pyCmd -join ' ')"
@@ -57,11 +124,11 @@ function Invoke-Venv {
         }
         if ($LASTEXITCODE -ne 0) { throw "venv creation failed" }
     } else {
-        # Sanity-check existing venv version
+        # Hard-stop on a wrong-version venv: pip install would otherwise build
+        # wheels for the wrong Python and the resulting venv would be broken.
         $existing = & "$scriptRoot\virtualEnv\Scripts\python.exe" --version 2>&1
         if ($existing -notmatch "3\.11\.") {
-            Write-Warning "Existing virtualEnv uses $existing - project requires Python 3.11."
-            Write-Warning "Delete virtualEnv\ and re-run '.\setup.ps1 venv' to recreate."
+            throw "Existing virtualEnv uses $existing but the project requires Python 3.11. Delete the folder and re-run:`n  Remove-Item -Recurse -Force virtualEnv`n  .\setup.ps1 venv"
         }
     }
     $py = "$scriptRoot\virtualEnv\Scripts\python.exe"
