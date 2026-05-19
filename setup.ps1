@@ -1,4 +1,4 @@
-# Windows CPU setup entry point — mirrors the Linux Makefile targets.
+﻿# Windows CPU setup entry point - mirrors the Linux Makefile targets.
 #
 # Usage:
 #   .\setup.ps1 venv          # Create virtualEnv/ with Python 3.11 and install requirements-windows-cpu.txt
@@ -28,12 +28,12 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
 
 function Resolve-Python311 {
-    # Prefer the Windows Python launcher (`py -3.11`) — it knows about all
+    # Prefer the Windows Python launcher 'py -3.11' - it knows about all
     # installed Python versions and is the canonical way to pick one. Fall back
-    # to `python3.11` on PATH, then to whatever `python` is, with a version warning.
+    # to python3.11 on PATH, then to whatever 'python' is, with a version warning.
     if (Get-Command py -ErrorAction SilentlyContinue) {
         try {
-            $v = & py -3.11 --version 2>&1
+            $null = & py -3.11 --version 2>&1
             if ($LASTEXITCODE -eq 0) { return @("py", "-3.11") }
         } catch {}
     }
@@ -50,13 +50,17 @@ function Invoke-Venv {
     if (-not (Test-Path "$scriptRoot\virtualEnv")) {
         $pyCmd = Resolve-Python311
         Write-Host "Creating virtualEnv with: $($pyCmd -join ' ')"
-        & $pyCmd[0] $pyCmd[1..($pyCmd.Length-1)] -m venv "$scriptRoot\virtualEnv"
+        if ($pyCmd.Length -gt 1) {
+            & $pyCmd[0] $pyCmd[1..($pyCmd.Length-1)] -m venv "$scriptRoot\virtualEnv"
+        } else {
+            & $pyCmd[0] -m venv "$scriptRoot\virtualEnv"
+        }
         if ($LASTEXITCODE -ne 0) { throw "venv creation failed" }
     } else {
         # Sanity-check existing venv version
         $existing = & "$scriptRoot\virtualEnv\Scripts\python.exe" --version 2>&1
         if ($existing -notmatch "3\.11\.") {
-            Write-Warning "Existing virtualEnv uses $existing — project requires Python 3.11."
+            Write-Warning "Existing virtualEnv uses $existing - project requires Python 3.11."
             Write-Warning "Delete virtualEnv\ and re-run '.\setup.ps1 venv' to recreate."
         }
     }
@@ -89,7 +93,7 @@ function Invoke-Doctor {
     # requirements-windows-cpu.txt) lets HTTPS use the Windows cert store, so
     # corporate proxy CAs work transparently.
     $py = "$scriptRoot\virtualEnv\Scripts\python.exe"
-    if (-not (Test-Path $py)) { throw "virtualEnv missing — run '.\setup.ps1 venv' first" }
+    if (-not (Test-Path $py)) { throw "virtualEnv missing - run '.\setup.ps1 venv' first" }
 
     Write-Host "Pre-downloading nomic-embed-text-v1.5 (embedding model, ~150 MB)..."
     & $py -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('nomic-ai/nomic-embed-text-v1.5', trust_remote_code=True)"

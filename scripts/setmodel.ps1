@@ -1,4 +1,4 @@
-# PowerShell mirror of scripts/setmodel.sh — pulls Ollama models for the
+﻿# PowerShell mirror of scripts/setmodel.sh - pulls Ollama models for the
 # Windows CPU profile. The default 20B model is replaced with a 7B-class model
 # that is actually usable on a CPU laptop. Pass -Model to override.
 param(

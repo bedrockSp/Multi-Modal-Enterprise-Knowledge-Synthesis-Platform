@@ -1,6 +1,6 @@
-# Start two Ollama instances on 11434 (queries) and 11435 (VLM / doc parsing).
-# Equivalent to Makefile `ollama-1` + `ollama-2`. Logs go to logs/ollama-*.log.
-# Use Stop-Ollama (see Stop-Ollama.ps1) or `Get-Process ollama | Stop-Process`
+﻿# Start two Ollama instances on 11434 (queries) and 11435 (VLM / doc parsing).
+# Equivalent to Makefile 'ollama-1' + 'ollama-2'. Logs go to logs/ollama-*.log.
+# Use Stop-Ollama (see Stop-Ollama.ps1) or 'Get-Process ollama | Stop-Process'
 # to shut them down.
 
 $ErrorActionPreference = "Stop"
