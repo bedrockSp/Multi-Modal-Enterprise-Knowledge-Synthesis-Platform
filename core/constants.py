@@ -36,6 +36,20 @@ CHUNK_COUNT = 12  # Number of chunks to retrieve from vector DB for each query
 # Adaptive Retrieval Parameters
 MAX_TOTAL_CHUNKS = 200  # Coverage over speed — MapReduce handles context overflow
 
+# Reranker configuration (Step 2 of rag-refactor)
+# bge-reranker-v2-m3 — 568M params, Apache-2.0, multilingual, replaces
+# ms-marco-MiniLM-L-6-v2 (2019). max_length lifted from 512 to 2048 so the
+# reranker can see full parent-chunk context (parent chunks are ~1500 chars).
+RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+RERANKER_MAX_LENGTH = 2048
+# Thresholds: bge-reranker produces a more polarized score distribution than
+# ms-marco. Defaults match the previous ms-marco values so existing eval data
+# is comparable; tune via the eval suite once it's populated.
+RERANK_MIN_SCORE = 0.5            # Chunks below this are dropped (graph_nodes filter)
+RERANK_CRAG_AVG_THRESHOLD = 0.5      # avg score required for "high" CRAG confidence
+RERANK_CRAG_MEDIUM_THRESHOLD = 0.3   # avg score required for "medium" CRAG confidence
+RERANK_VLM_THRESHOLD = 0.8           # High-confidence threshold for VLM-on-page
+
 
 EASYOCR_WORKERS = (
     10  # Number of parallel workers for EasyOCR (adjust based on your CPU/GPU power)

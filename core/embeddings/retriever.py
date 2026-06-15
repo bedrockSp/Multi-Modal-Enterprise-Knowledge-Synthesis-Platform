@@ -19,13 +19,15 @@ def get_cross_encoder():
     """Lazy load the cross-encoder model on GPU with FP16 for ~4-9x faster reranking."""
     global _cross_encoder
     if _cross_encoder is None:
-        print("Loading cross-encoder model for re-ranking (GPU, FP16)...")
+        from core.constants import RERANKER_MAX_LENGTH, RERANKER_MODEL
+
+        print(f"Loading cross-encoder model {RERANKER_MODEL} for re-ranking (GPU, FP16)...")
         import torch
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         _cross_encoder = CrossEncoder(
-            "cross-encoder/ms-marco-MiniLM-L-6-v2",
-            max_length=512,  # Truncate inputs to model's max position embeddings
+            RERANKER_MODEL,
+            max_length=RERANKER_MAX_LENGTH,
             device=device,
         )
         if device == "cuda":

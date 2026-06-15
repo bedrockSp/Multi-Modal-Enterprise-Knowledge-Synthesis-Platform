@@ -175,9 +175,11 @@ async def retriever(state: AgentState) -> AgentState:
         scores = [d.get("rerank_score", 0.0) for d in modified_docs]
         avg_rerank = sum(scores) / len(scores) if scores else 0.0
 
-    if num_chunks >= 5 and avg_rerank >= 0.5:
+    from core.constants import RERANK_CRAG_AVG_THRESHOLD, RERANK_CRAG_MEDIUM_THRESHOLD
+
+    if num_chunks >= 5 and avg_rerank >= RERANK_CRAG_AVG_THRESHOLD:
         state.confidence_score = "high"
-    elif num_chunks >= 3 and avg_rerank >= 0.3:
+    elif num_chunks >= 3 and avg_rerank >= RERANK_CRAG_MEDIUM_THRESHOLD:
         state.confidence_score = "medium"
     else:
         state.confidence_score = "low"
@@ -256,13 +258,15 @@ async def retriever(state: AgentState) -> AgentState:
             import traceback
             traceback.print_exc()
 
-    # ── Filter low-relevance chunks (rerank_score < 0.5) ──
-    # Chunks below 0.5 are essentially noise — the reranker considers them
+    # ── Filter low-relevance chunks (rerank_score < RERANK_MIN_SCORE) ──
+    # Chunks below this are essentially noise — the reranker considers them
     # irrelevant. Passing them to the LLM dilutes good context and can mislead.
     # Always keep at least the top 2 chunks as fallback.
     # SKIP in full-document mode — we need every slide/page regardless of score.
     if state.chunks and not state.full_document_mode:
-        MIN_RERANK_SCORE = 0.5
+        from core.constants import RERANK_MIN_SCORE
+
+        MIN_RERANK_SCORE = RERANK_MIN_SCORE
         filtered = [c for c in state.chunks if c.get("rerank_score", 0.0) >= MIN_RERANK_SCORE]
         if len(filtered) < 2:
             # Keep top 2 by score as fallback even if below threshold
@@ -871,9 +875,9 @@ async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
     import fitz  # PyMuPDF
 
     from core.parsers.vlm import vlm_parse_concurrent
-    from core.constants import PORT2
+    from core.constants import PORT2, RERANK_VLM_THRESHOLD
 
-    MIN_SCORE = 0.8
+    MIN_SCORE = RERANK_VLM_THRESHOLD
     MAX_PAGES = 5
 
     # Collect unique high-confidence pages
