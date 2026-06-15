@@ -184,26 +184,45 @@ async def retriever(state: AgentState) -> AgentState:
     else:
         state.confidence_score = "low"
 
-    # On re-retrieval (CRAG retry), merge new chunks with previous set
-    # so the LLM sees both retrieval attempts for broader coverage
+    # On re-retrieval (CRAG retry), combine prev + new, dedupe, re-rank, and
+    # truncate to the size of a single retrieval. The previous union-merge let
+    # the pool grow across attempts, which meant a broad first pass (e.g.
+    # "achievements") permanently polluted the context even after a narrower
+    # second pass (e.g. "FY24 achievements"). With re-rank-and-truncate the
+    # corrective attempt's better-scored chunks can displace stale ones from
+    # the prior attempt — chunks are retained on merit, not on order of arrival.
     if state.retrieval_attempts > 0 and state.chunks:
-        existing_keys = set()
-        for c in state.chunks:
-            key = (c.get("document_id", ""), c.get("page_no", 0), c.get("content", "")[:100])
-            existing_keys.add(key)
+        def _dedupe_key(c):
+            return (
+                c.get("document_id", ""),
+                c.get("page_no", 0),
+                c.get("content", "")[:100],
+            )
 
-        merged = list(state.chunks)
-        for doc in modified_docs:
-            key = (doc.get("document_id", ""), doc.get("page_no", 0), doc.get("content", "")[:100])
-            if key not in existing_keys:
-                merged.append(doc)
+        prev_chunks = list(state.chunks)
+        prev_keys = {_dedupe_key(c) for c in prev_chunks}
+        new_only = [d for d in modified_docs if _dedupe_key(d) not in prev_keys]
 
-        # Sort merged set by rerank_score descending
-        merged.sort(key=lambda d: d.get("rerank_score", 0.0), reverse=True)
-        state.chunks = merged
+        combined = prev_chunks + new_only
+        combined.sort(key=lambda d: d.get("rerank_score", 0.0), reverse=True)
+
+        # Budget = max of (previous attempt size, new attempt size).
+        # This stops unbounded accumulation across retries while still allowing
+        # either attempt to fully populate the context if it had higher recall.
+        budget = max(len(prev_chunks), len(modified_docs))
+        truncated = combined[:budget]
+
+        # Diagnostic: how many of each origin survived the rerank?
+        surviving_keys = {_dedupe_key(c) for c in truncated}
+        prev_survived = sum(1 for c in prev_chunks if _dedupe_key(c) in surviving_keys)
+        new_survived = sum(1 for d in modified_docs if _dedupe_key(d) in surviving_keys)
+        prev_dropped = len(prev_chunks) - prev_survived
+
+        state.chunks = truncated
         print(
-            f"[CRAG Merge] Combined {len(state.chunks)} chunks "
-            f"(prev: {len(existing_keys)}, new unique: {len(merged) - len(existing_keys)})"
+            f"[CRAG Merge] {len(prev_chunks)} prev + {len(modified_docs)} new "
+            f"-> dedup {len(combined)} -> truncate to {len(truncated)} "
+            f"(prev kept: {prev_survived}, prev dropped: {prev_dropped}, new kept: {new_survived})"
         )
     else:
         state.chunks = modified_docs
