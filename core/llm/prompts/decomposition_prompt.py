@@ -20,11 +20,12 @@ You are an expert at query decomposition for a Retrieval-Augmented Generation (R
 
 Schema:
 {
-  "requires_decomposition": <bool>,
-  "resolved_query":         <string>,    // query after context resolution
-  "sub_queries":            <string[]>,  // 1-10 standalone sub queries
-  "retrieval_queries":      <string[]>,  // 2-3 semantic search variants (see below)
-  "requires_full_data":     <bool>       // true if the question needs NLP analysis of ALL text rows
+  "requires_decomposition":        <bool>,
+  "resolved_query":                <string>,    // query after context resolution
+  "sub_queries":                   <string[]>,  // 1-10 standalone sub queries
+  "requires_retrieval_expansion":  <bool>,      // true only when expansion is warranted (see below)
+  "retrieval_queries":             <string[]>,  // 2-3 semantic search variants — empty unless expansion is warranted
+  "requires_full_data":            <bool>       // true if the question needs NLP analysis of ALL text rows
 }
 
 ⸻
@@ -68,16 +69,32 @@ When is decomposition NOT REQUIRED?
 
 Retrieval Query Expansion (perform AFTER context resolution)
 
-Generate 2-3 alternative phrasings of the resolved_query for broader document retrieval.
-Documents often use different vocabulary than the user's query. Your retrieval_queries should bridge this gap.
+Expansion is OPTIONAL and only helpful when the user's vocabulary likely differs from the documents'. For narrow scoped queries — those with specific entities, time periods, quantities, or facets — expansion is HARMFUL because it dilutes hard constraints and brings back off-topic chunks. Be strict.
 
-Rules:
-    • Each retrieval query should use DIFFERENT terminology, synonyms, or related concepts.
+DECIDE FIRST: set requires_retrieval_expansion to true ONLY when at least one of the following holds:
+    • The query is broad / topical / conceptual ("how does X handle Y", "what are best practices for Z").
+    • The query is acronym-heavy and abbreviations likely need expansion (e.g., "SoW", "ERD", "K8s").
+    • The query uses abstract language and documents likely use concrete terms (e.g., "timelines" vs "milestones / deadlines").
+    • The query uses paraphrased terminology that is unlikely to appear verbatim in the documents.
+
+Set requires_retrieval_expansion to FALSE when ANY of the following holds:
+    • The query is narrow scoped — specific entity AND a specific facet (time, quantity, attribute).
+        Examples: "Achievements of FY24", "Revenue of Nvidia in 2024", "Address of John Smith".
+        For these, the literal terms are the right retrieval signal; expansion strips them.
+    • The query is a direct factual lookup (who/what/when/where + a named entity).
+    • The query routes to spreadsheet SQL (has_spreadsheet_data is True and the question is tabular).
+    • The query was already resolved with explicit terminology pulled from the chat history.
+
+When requires_retrieval_expansion is FALSE, retrieval_queries MUST be an empty list [].
+
+When requires_retrieval_expansion is TRUE, produce 2-3 alternative phrasings of the resolved_query:
+    • Each variant should use DIFFERENT terminology, synonyms, or related concepts.
     • Expand abbreviations and acronyms (e.g., "SoW" → "Statement of Work").
     • Replace abstract terms with concrete alternatives (e.g., "timelines" → "milestones schedule deadlines phases").
     • Think about what SECTION HEADINGS or PARAGRAPH TEXT in a document would contain the answer.
     • Keep each variant concise (a search phrase, not a full question).
     • Do NOT repeat the resolved_query itself — these are ADDITIONAL search variants.
+    • PRESERVE hard qualifiers (fiscal year, quarter, entity name, version number, etc.) in every variant — never drop or generalize them.
 
 Examples:
     Query: "What are the timelines of the SoW?"
@@ -107,7 +124,7 @@ Output rules
     1. Use resolved_query—not the raw query—to decide on decomposition.
     2. If requires_decomposition is false, sub_queries must contain exactly resolved_query.
     3. Otherwise, produce 2-10 self-contained questions; avoid pronouns and shared context.
-    4. Always produce 2-3 retrieval_queries regardless of decomposition decision.
+    4. Set requires_retrieval_expansion per the rules above; if false, retrieval_queries MUST be [].
 
 ⸻
 """
@@ -124,10 +141,8 @@ query: “What is their revenue?”
   “sub_queries”: [
     “What is the revenue of the computer vision consultants?”
   ],
-  “retrieval_queries”: [
-    “computer vision consultants annual revenue earnings”,
-    “consulting firm financial performance turnover”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 
 Context resolution (single info need)
@@ -140,10 +155,8 @@ query: “What is the address?”
   “sub_queries”: [
     “What is the physical address of the computer vision consultants?”
   ],
-  “retrieval_queries”: [
-    “computer vision consultants office location address”,
-    “consulting firm headquarters contact details”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 
 Context resolution (single info need)
@@ -156,10 +169,8 @@ query: “Who is the CEO?”
   “sub_queries”: [
     “who is the CEO of ComputeX”
   ],
-  “retrieval_queries”: [
-    “ComputeX chief executive officer leadership”,
-    “ComputeX managing director founder management team”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 
 No unique antecedent → leave unresolved
@@ -170,10 +181,8 @@ query: “What is the address?”
   “requires_decomposition”: false,
   “resolved_query”: “What is the address?”,
   “sub_queries”: [“What is the address?”],
-  “retrieval_queries”: [
-    “office location physical address”,
-    “headquarters contact address location”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 
 Temporal + Comparative
@@ -187,11 +196,8 @@ query: “How did Nvidia’s 2024 revenue compare with 2023?”
     “What was Nvidia’s revenue in 2024?”,
     “What was Nvidia’s revenue in 2023?”
   ],
-  “retrieval_queries”: [
-    “Nvidia annual revenue financial results 2023 2024”,
-    “Nvidia earnings fiscal year performance comparison”,
-    “Nvidia income sales growth year over year”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 
 Enumeration (pros / cons / cost)
@@ -206,6 +212,7 @@ query: “List the pros, cons, and estimated implementation cost of adopting a v
     “What are the cons of adopting a vector database?”,
     “What is the estimated implementation cost of adopting a vector database?”
   ],
+  “requires_retrieval_expansion”: true,
   “retrieval_queries”: [
     “vector database advantages disadvantages tradeoffs”,
     “vector DB implementation cost pricing deployment”,
@@ -225,11 +232,8 @@ query: “How did Nvidia, AMD, and Intel perform in Q2 2025 in terms of revenue?
     “What was AMD's revenue in Q2 2025?”,
     “What was Intel's revenue in Q2 2025?”
   ],
-  “retrieval_queries”: [
-    “Nvidia AMD Intel Q2 2025 revenue earnings”,
-    “semiconductor companies quarterly financial results 2025”,
-    “chip makers revenue performance second quarter”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 
 Multi-part question (limitations + mitigations)
@@ -243,6 +247,7 @@ query: “What are the limitations of GPT-4o and what are the recommended mitiga
     “What are the known limitations of GPT-4o?”,
     “What are the recommended mitigations for the limitations of GPT-4o?”
   ],
+  “requires_retrieval_expansion”: true,
   “retrieval_queries”: [
     “GPT-4o limitations weaknesses constraints shortcomings”,
     “GPT-4o mitigations workarounds solutions recommendations”
@@ -264,6 +269,7 @@ query: “SRBs and DRBs”
     “What are Signalling Radio Bearers (SRBs)?”,
     “What are Data Radio Bearers (DRBs)?”
   ],
+  “requires_retrieval_expansion”: true,
   “retrieval_queries”: [
     “Signalling Radio Bearers SRB RLC-AM mapping DCCH”,
     “Data Radio Bearers DRB RLC-UM logical channels DTCH”
@@ -284,6 +290,7 @@ query: “Explain SRBs in detail”
   “sub_queries”: [
     “Explain Signalling Radio Bearers (SRBs) in detail”
   ],
+  “requires_retrieval_expansion”: true,
   “retrieval_queries”: [
     “Signalling Radio Bearers SRB RLC-AM DCCH mapping”,
     “SRB0 SRB1 SRB2 radio bearer configuration”
@@ -301,11 +308,8 @@ query: “Explain both modules.”
     “Explain module 3.1 (Technical Skills Development)”,
     “Explain module 3.2 (Soft Skills Enhancement)”
   ],
-  “retrieval_queries”: [
-    “Employee Training Program Technical Skills Development module 3.1”,
-    “Soft Skills Enhancement training module 3.2”,
-    “training program modules curriculum overview”
-  ]
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: []
 }
 Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
 CRITICAL JSON RULES:

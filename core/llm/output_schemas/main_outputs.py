@@ -176,13 +176,24 @@ class DecompositionLLMOutput(LLMOutputBase):
     sub_queries: List[str] = Field(
         description="List of standalone sub-queries generated from the original query."
     )
+    requires_retrieval_expansion: bool = Field(
+        default=False,
+        description=(
+            "Set true ONLY when the query is broad/conceptual, acronym-heavy, or uses "
+            "vocabulary that the documents are unlikely to use directly. Set false for "
+            "narrow scoped queries with specific entities/time/facets (e.g., 'Achievements "
+            "of FY24'), direct factual lookups, or spreadsheet-routable questions — these "
+            "must not be broadened or the system will return off-topic chunks."
+        ),
+    )
     retrieval_queries: List[str] = Field(
         default_factory=list,
         description=(
-            "2-3 alternative phrasings of the resolved query using synonyms, related "
-            "terminology, and different vocabulary that documents might use. These are "
-            "used for broader vector search coverage — e.g., 'timelines' → 'milestones "
-            "and schedule', 'SoW' → 'Statement of Work scope and deliverables'."
+            "Used only when requires_retrieval_expansion is true. 2-3 alternative phrasings "
+            "of the resolved query using synonyms, related terminology, and different "
+            "vocabulary that documents might use — e.g., 'timelines' → 'milestones and "
+            "schedule', 'SoW' → 'Statement of Work scope and deliverables'. MUST be empty "
+            "when requires_retrieval_expansion is false."
         ),
     )
     requires_full_data: bool = Field(

@@ -105,9 +105,13 @@ class AgentState(BaseModel):
     )
 
     # Semantic retrieval expansion — alternative phrasings for broader vector search
+    requires_retrieval_expansion: bool = Field(
+        default=False,
+        description="True only when the decomposition LLM judges the query benefits from semantic expansion. Narrow scoped queries (specific entity + facet) should set this False so locked constraints survive.",
+    )
     retrieval_queries: List[str] = Field(
         default_factory=list,
-        description="LLM-generated alternative query phrasings with synonyms and related terminology for wider retrieval coverage.",
+        description="LLM-generated alternative query phrasings with synonyms and related terminology for wider retrieval coverage. Only used when requires_retrieval_expansion is True AND SWITCHES['QUERY_EXPANSION'] is on.",
     )
 
     # Phase 3.2: Triple context — entity relationships injected at retrieval time

@@ -172,6 +172,7 @@ async def query(request: Request, body: QueryRequest):
                         spreadsheet_schema=spreadsheet_schema,
                         thread_instructions=thread_instructions,
                         requires_full_data=getattr(decomposition_result, "requires_full_data", False),
+                        requires_retrieval_expansion=getattr(decomposition_result, "requires_retrieval_expansion", False),
                         retrieval_queries=getattr(decomposition_result, "retrieval_queries", []),
                     )
                 )
@@ -375,6 +376,7 @@ async def query(request: Request, body: QueryRequest):
                 spreadsheet_schema=spreadsheet_schema,
                 thread_instructions=thread_instructions,
                 requires_full_data=getattr(decomposition_result, "requires_full_data", False),
+                requires_retrieval_expansion=getattr(decomposition_result, "requires_retrieval_expansion", False),
                 retrieval_queries=getattr(decomposition_result, "retrieval_queries", []),
             )
         )

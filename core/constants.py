@@ -25,6 +25,7 @@ SWITCHES = {
     "TECH_SENSING": True,  # GenAI Tech Sensing — automated technology radar report generation
     "DOCUMENT_GRAPH": True,  # DocumentGraph — corpus-level knowledge graph with Sigma.js viz
     "RATE_LIMIT_INTERNAL": True,  # Apply 3-call-per-60s rate limit to INTERNAL API. Set False to disable when quota allows.
+    "QUERY_EXPANSION": True,  # Honor the decomposition LLM's requires_retrieval_expansion flag. Set False to globally disable semantic expansion regardless of LLM decision.
 }
 
 # GLM-OCR Configuration

@@ -84,12 +84,20 @@ async def retriever(state: AgentState) -> AgentState:
     ):
         additional_queries.append(state.resolved_query)
 
-    # Semantic expansion: LLM-generated alternative phrasings from decomposition
-    if state.retrieval_queries:
+    # Semantic expansion: LLM-generated alternative phrasings from decomposition.
+    # Gate on BOTH the per-query decision (requires_retrieval_expansion) AND the
+    # global switch. Narrow scoped queries explicitly set the flag False so that
+    # locked constraints (FY24, named entities, version numbers) don't get
+    # diluted by paraphrases.
+    expansion_enabled = SWITCHES.get("QUERY_EXPANSION", True)
+    if state.retrieval_queries and expansion_enabled and state.requires_retrieval_expansion:
         for rq in state.retrieval_queries:
             if rq and rq not in additional_queries and rq != query:
                 additional_queries.append(rq)
-        print(f"[Retrieval] +{len(state.retrieval_queries)} semantic expansion queries")
+        print(f"[Retrieval] +{len(state.retrieval_queries)} semantic expansion queries (LLM-approved, switch on)")
+    elif state.retrieval_queries:
+        why = "global switch off" if not expansion_enabled else "LLM judged query is narrow-scoped"
+        print(f"[Retrieval] Skipping {len(state.retrieval_queries)} expansion queries — {why}")
 
     # Phase 2.3: HyDE — generate a hypothetical document passage for retrieval
     if SWITCHES.get("HYDE", False):
