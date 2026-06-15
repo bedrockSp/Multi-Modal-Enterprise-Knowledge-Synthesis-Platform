@@ -45,6 +45,10 @@ class AgentState(BaseModel):
     doc_batched_answer: Optional[str] = None  # combined answer from batched multi-doc MapReduce
     vlm_visual_answer: Optional[str] = None  # query-time VLM answer for page/slide/figure references
     requires_full_data: Optional[bool] = None  # LLM-classified: query needs full-data NLP analysis
+    answer_class: Optional[str] = Field(
+        default="narrative",
+        description="Coarse answer shape from decomposition; drives the schema-first synthesis renderer.",
+    )
     sql_attempts: int = 0
     has_spreadsheet_data: bool = False
     spreadsheet_only: bool = False  # True when ALL thread documents are spreadsheets

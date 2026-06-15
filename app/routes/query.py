@@ -319,6 +319,7 @@ async def query(request: Request, body: QueryRequest):
             results, decomposition_result.resolved_query, question,
             chunks=chunks,
             generative_mode=is_generative,
+            answer_class=getattr(decomposition_result, "answer_class", "narrative"),
         )
         ce = time.time() - cs
         print(f"Subqueries combination time: {ce:.2f} seconds (generative={is_generative})")

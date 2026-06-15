@@ -25,6 +25,7 @@ Schema:
   "sub_queries":                   <string[]>,  // 1-10 standalone sub queries
   "requires_retrieval_expansion":  <bool>,      // true only when expansion is warranted (see below)
   "retrieval_queries":             <string[]>,  // 2-3 semantic search variants — empty unless expansion is warranted
+  "answer_class":                  <string>,    // shape of the expected answer (see classification rules below)
   "requires_full_data":            <bool>       // true if the question needs NLP analysis of ALL text rows
 }
 
@@ -120,11 +121,25 @@ Examples:
 
 ⸻
 
+Answer Class Classification (perform LAST)
+
+Classify the OVERALL answer shape into one of these classes — this drives how
+the multi-sub-query synthesizer renders the final answer:
+    • "factoid"                — single fact lookup (who/what/when/where + one entity)
+    • "comparison"             — 2+ entities compared side-by-side (revenue of A vs B vs C, pros vs cons)
+    • "timeline"               — events ordered by time, history, evolution
+    • "enumeration"            — list of items (pros, cons, modules, features) with no time/entity grouping
+    • "achievements_by_period" — accomplishments grouped by entity AND time period (e.g. "What did X achieve in FY24?")
+    • "multi_entity_summary"   — summarize each of multiple entities (e.g. "Tell me about each team")
+    • "ranking"                — sorted by metric/value (top N, biggest, fastest)
+    • "narrative"              — free-form prose (default if nothing else applies)
+
 Output rules
     1. Use resolved_query—not the raw query—to decide on decomposition.
     2. If requires_decomposition is false, sub_queries must contain exactly resolved_query.
     3. Otherwise, produce 2-10 self-contained questions; avoid pronouns and shared context.
     4. Set requires_retrieval_expansion per the rules above; if false, retrieval_queries MUST be [].
+    5. Set answer_class per the classification rules above; default to "narrative" if uncertain.
 
 ⸻
 """
@@ -142,7 +157,8 @@ query: “What is their revenue?”
     “What is the revenue of the computer vision consultants?”
   ],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “factoid”
 }
 
 Context resolution (single info need)
@@ -156,7 +172,8 @@ query: “What is the address?”
     “What is the physical address of the computer vision consultants?”
   ],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “factoid”
 }
 
 Context resolution (single info need)
@@ -170,7 +187,8 @@ query: “Who is the CEO?”
     “who is the CEO of ComputeX”
   ],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “factoid”
 }
 
 No unique antecedent → leave unresolved
@@ -182,7 +200,8 @@ query: “What is the address?”
   “resolved_query”: “What is the address?”,
   “sub_queries”: [“What is the address?”],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “factoid”
 }
 
 Temporal + Comparative
@@ -197,7 +216,8 @@ query: “How did Nvidia’s 2024 revenue compare with 2023?”
     “What was Nvidia’s revenue in 2023?”
   ],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “comparison”
 }
 
 Enumeration (pros / cons / cost)
@@ -217,7 +237,8 @@ query: “List the pros, cons, and estimated implementation cost of adopting a v
     “vector database advantages disadvantages tradeoffs”,
     “vector DB implementation cost pricing deployment”,
     “embedding store benefits limitations comparison”
-  ]
+  ],
+  “answer_class”: “enumeration”
 }
 
 Entity-set comparison (multiple companies)
@@ -233,7 +254,8 @@ query: “How did Nvidia, AMD, and Intel perform in Q2 2025 in terms of revenue?
     “What was Intel's revenue in Q2 2025?”
   ],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “comparison”
 }
 
 Multi-part question (limitations + mitigations)
@@ -251,7 +273,8 @@ query: “What are the limitations of GPT-4o and what are the recommended mitiga
   “retrieval_queries”: [
     “GPT-4o limitations weaknesses constraints shortcomings”,
     “GPT-4o mitigations workarounds solutions recommendations”
-  ]
+  ],
+  “answer_class”: “enumeration”
 }
 
 Split into sub-questions
@@ -273,7 +296,8 @@ query: “SRBs and DRBs”
   “retrieval_queries”: [
     “Signalling Radio Bearers SRB RLC-AM mapping DCCH”,
     “Data Radio Bearers DRB RLC-UM logical channels DTCH”
-  ]
+  ],
+  “answer_class”: “multi_entity_summary”
 }
 
 Expand terms if in previous chat history
@@ -294,7 +318,8 @@ query: “Explain SRBs in detail”
   “retrieval_queries”: [
     “Signalling Radio Bearers SRB RLC-AM DCCH mapping”,
     “SRB0 SRB1 SRB2 radio bearer configuration”
-  ]
+  ],
+  “answer_class”: “narrative”
 }
 
 Quantifier + Enumeration
@@ -309,7 +334,8 @@ query: “Explain both modules.”
     “Explain module 3.2 (Soft Skills Enhancement)”
   ],
   “requires_retrieval_expansion”: false,
-  “retrieval_queries”: []
+  “retrieval_queries”: [],
+  “answer_class”: “multi_entity_summary”
 }
 Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
 CRITICAL JSON RULES:

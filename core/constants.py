@@ -26,6 +26,7 @@ SWITCHES = {
     "DOCUMENT_GRAPH": True,  # DocumentGraph — corpus-level knowledge graph with Sigma.js viz
     "RATE_LIMIT_INTERNAL": True,  # Apply 3-call-per-60s rate limit to INTERNAL API. Set False to disable when quota allows.
     "QUERY_EXPANSION": True,  # Honor the decomposition LLM's requires_retrieval_expansion flag. Set False to globally disable semantic expansion regardless of LLM decision.
+    "SCHEMA_SYNTHESIS": True,  # Schema-first synthesis for multi-sub-query combination (rag-refactor step 6). Set False to fall back to legacy prose-then-combine.
 }
 
 # GLM-OCR Configuration

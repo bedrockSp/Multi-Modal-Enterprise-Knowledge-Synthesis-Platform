@@ -196,6 +196,17 @@ class DecompositionLLMOutput(LLMOutputBase):
             "when requires_retrieval_expansion is false."
         ),
     )
+    answer_class: str = Field(
+        default="narrative",
+        description=(
+            "Coarse shape of the expected answer — drives the canonical renderer. One of: "
+            "'factoid' (single fact lookup), 'comparison' (2+ entities side-by-side), "
+            "'timeline' (events over time), 'enumeration' (list of items like pros/cons/modules), "
+            "'achievements_by_period' (accomplishments grouped by entity x time period), "
+            "'multi_entity_summary' (summarise each of several entities), "
+            "'ranking' (sorted by metric), 'narrative' (free-form prose, default)."
+        ),
+    )
     requires_full_data: bool = Field(
         default=False,
         description=(
