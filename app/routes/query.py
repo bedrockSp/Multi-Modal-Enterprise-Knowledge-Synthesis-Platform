@@ -72,6 +72,12 @@ async def query(request: Request, body: QueryRequest):
                 messages.append(HumanMessage(content=chat.get("content", "")))
             elif chat.get("type") == "agent":
                 messages.append(AIMessage(content=chat.get("content", "")))
+
+    # Cap thread history threaded into the agent so follow-up grounding works
+    # (main_prompt and other nodes consume state.messages) without inflating
+    # every LLM call with the entire conversation history.
+    AGENT_HISTORY_LIMIT = 6  # last 3 user/agent turns
+    agent_history = messages[-AGENT_HISTORY_LIMIT:] if messages else []
     chunks = []
     chunks_used = []
     confidence_scores = []
@@ -160,7 +166,7 @@ async def query(request: Request, body: QueryRequest):
                         query=query_data["query"],
                         resolved_query=decomposition_result.resolved_query,
                         original_query=question,
-                        messages=[],
+                        messages=list(agent_history),
                         web_search=False,
                         llm=model,
                         initial_search_answer=query_data["answer"] or "",
@@ -364,7 +370,7 @@ async def query(request: Request, body: QueryRequest):
                 query=resolved_query,
                 resolved_query=resolved_query,
                 original_query=question,
-                messages=[],
+                messages=list(agent_history),
                 web_search=False,
                 llm=GPU_QUERY_LLM,
                 mode=mode,
