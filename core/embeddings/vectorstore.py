@@ -366,6 +366,28 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
         # Phase 3.1: Collect entity mentions for entity profile building
         entity_mentions = []
 
+        # Step 5 (rag-refactor): document-level facets stamped onto every chunk
+        # so the retriever can hard-filter by fiscal_year/quarter/doc_type.
+        from core.constants import SWITCHES
+        from core.embeddings.facets import (
+            extract_document_facets,
+            facets_to_chroma_metadata,
+        )
+
+        doc_facet_meta: dict = {}
+        if SWITCHES.get("FACET_FILTERING", True):
+            try:
+                facets = await extract_document_facets(
+                    title=doc.title,
+                    text=doc.full_text or "",
+                    summary=getattr(doc, "summary", None),
+                )
+                doc_facet_meta = facets_to_chroma_metadata(facets)
+                if doc_facet_meta:
+                    print(f"[Facets][ingest] {doc.title!r}: {doc_facet_meta}")
+            except Exception as e:
+                print(f"[Facets][ingest] failed for {doc.title!r}: {e}")
+
         for page in doc.content:
             # Hierarchical chunking: child chunks are indexed; parent text is stored
             # in metadata for later expansion before LLM prompting.
@@ -411,6 +433,8 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     "file_name": doc.file_name,
                     "title": doc.title,
                 }
+                if doc_facet_meta:
+                    metadata.update(doc_facet_meta)
 
                 # Phase 1.2: Extract entities — used for both metadata and profiles
                 names, types = extract_entities(child_text)
@@ -450,6 +474,8 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                 "title": doc.title,
                 "chunk_type": "document_summary",
             }
+            if doc_facet_meta:
+                summary_metadata.update(doc_facet_meta)
             ner_meta = extract_entities_for_metadata(summary_text)
             summary_metadata.update(ner_meta)
             chunk_data.append((summary_id, summary_enriched, summary_metadata))
@@ -471,6 +497,8 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     "file_name": doc.file_name,
                     "title": doc.title,
                 }
+                if doc_facet_meta:
+                    profile_metadata.update(doc_facet_meta)
                 profile_metadata.update(extra_meta)
                 chunk_data.append((profile_id, profile_text, profile_metadata))
             print(

@@ -123,3 +123,10 @@ class AgentState(BaseModel):
         default=None,
         description="Formatted entity relationship triples relevant to the query.",
     )
+
+    # Step 5: Locked facets extracted once per query. Pass through CRAG retries
+    # unchanged so corrective refinement cannot silently drop hard constraints.
+    query_facets: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Locked retrieval facets (fiscal_year, quarter, calendar_year, doc_type). Stored as dict for state serialization compatibility.",
+    )

@@ -120,6 +120,41 @@ async def retriever(state: AgentState) -> AgentState:
         except Exception as e:
             print(f"[HyDE] Error generating hypothetical document: {e}, skipping")
 
+    # Step 5 (rag-refactor): extract locked facets ONCE per query and reuse on
+    # CRAG retries. Hard-filters the vector + BM25 retrieval at the source so
+    # constraints like FY24 cannot be relaxed by later query refinement.
+    facet_conditions = None
+    if SWITCHES.get("FACET_FILTERING", True):
+        if state.query_facets is None:
+            try:
+                from core.embeddings.facets import (
+                    extract_query_facets,
+                    query_facets_to_chroma_where,
+                )
+
+                qfacets = await extract_query_facets(state.original_query or query)
+                state.query_facets = qfacets.model_dump()
+                facet_conditions = query_facets_to_chroma_where(qfacets)
+                if facet_conditions:
+                    print(f"[Facets][query] locked: {state.query_facets}")
+                else:
+                    print("[Facets][query] no facets extracted (unfiltered retrieval)")
+            except Exception as e:
+                print(f"[Facets][query] extraction failed: {e}, proceeding unfiltered")
+                state.query_facets = {}
+        else:
+            # CRAG retry — rebuild conditions from already-locked facets
+            from core.embeddings.facets import query_facets_to_chroma_where
+            from core.llm.output_schemas.facet_outputs import QueryFacets
+
+            try:
+                qfacets = QueryFacets.model_validate(state.query_facets)
+                facet_conditions = query_facets_to_chroma_where(qfacets)
+                if facet_conditions:
+                    print(f"[Facets][query] reusing locked facets on retry: {state.query_facets}")
+            except Exception as e:
+                print(f"[Facets][query] failed to rebuild from state: {e}")
+
     retrieved_docs = await get_thread_documents_retriever(
         user_id=state.user_id,
         thread_id=state.thread_id,
@@ -127,6 +162,7 @@ async def retriever(state: AgentState) -> AgentState:
         additional_queries=additional_queries if additional_queries else None,
         k=None,  # None enables adaptive scaling
         max_total_chunks=MAX_TOTAL_CHUNKS,
+        facet_conditions=facet_conditions,
         full_document_mode=state.full_document_mode,
     )
 

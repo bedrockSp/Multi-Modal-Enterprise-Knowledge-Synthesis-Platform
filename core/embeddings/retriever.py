@@ -261,7 +261,11 @@ def _cosine_similarity(vec_a: Dict[str, float], vec_b: Dict[str, float]) -> floa
 
 
 def get_user_retriever(
-    user_id: str, thread_id: str, document_id: str = None, k: int = 5
+    user_id: str,
+    thread_id: str,
+    document_id: str = None,
+    k: int = 5,
+    extra_conditions: List[Dict[str, Any]] | None = None,
 ):
     """
     Get a retriever for a specific user, thread, and optionally document.
@@ -271,6 +275,8 @@ def get_user_retriever(
         thread_id: Thread identifier
         document_id: Optional document identifier to filter by
         k: Number of chunks to retrieve
+        extra_conditions: Optional list of ChromaDB where conditions appended
+            under $and. Used for locked-facet hard filters (rag-refactor step 5).
 
     Returns:
         LangChain retriever object
@@ -284,6 +290,8 @@ def get_user_retriever(
         filter_conditions.append({"thread_id": {"$eq": thread_id}})
     if document_id is not None:
         filter_conditions.append({"document_id": {"$eq": document_id}})
+    if extra_conditions:
+        filter_conditions.extend(extra_conditions)
 
     search_kwargs = {
         "k": k,
@@ -294,6 +302,20 @@ def get_user_retriever(
     return retriever
 
 
+def _chunk_passes_facets(meta: Dict[str, Any], facet_conditions: List[Dict[str, Any]]) -> bool:
+    """Apply a ChromaDB-style $eq facet check against a chunk's metadata. Used
+    to post-filter BM25 results, which don't run through ChromaDB's where."""
+    if not facet_conditions:
+        return True
+    for cond in facet_conditions:
+        for field, op in cond.items():
+            expected = op.get("$eq") if isinstance(op, dict) else op
+            actual = meta.get(field)
+            if actual != expected:
+                return False
+    return True
+
+
 async def hybrid_retrieve(
     user_id: str,
     thread_id: str,
@@ -301,6 +323,7 @@ async def hybrid_retrieve(
     additional_queries: List[str] = None,
     vector_k: int = 30,
     bm25_k: int = 20,
+    facet_conditions: List[Dict[str, Any]] | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Hybrid retrieval combining vector search (ChromaDB) and BM25 keyword search.
@@ -342,7 +365,12 @@ async def hybrid_retrieve(
         per_query_vector_k = vector_k
         per_query_bm25_k = bm25_k
 
-    vector_retriever = get_user_retriever(user_id, thread_id, k=per_query_vector_k)
+    vector_retriever = get_user_retriever(
+        user_id,
+        thread_id,
+        k=per_query_vector_k,
+        extra_conditions=facet_conditions,
+    )
 
     async def get_vector_results(q: str):
         try:
@@ -354,9 +382,20 @@ async def hybrid_retrieve(
 
     async def get_bm25_results(q: str):
         try:
-            return await asyncio.to_thread(
+            results = await asyncio.to_thread(
                 search_bm25, user_id, thread_id, q, per_query_bm25_k
             )
+            if facet_conditions:
+                # BM25 doesn't go through ChromaDB's where, so apply facets here.
+                kept = [
+                    r for r in results
+                    if _chunk_passes_facets(r.get("metadata", {}) or {}, facet_conditions)
+                ]
+                dropped = len(results) - len(kept)
+                if dropped:
+                    print(f"[Retrieval] BM25 facet post-filter dropped {dropped}/{len(results)} chunks")
+                return kept
+            return results
         except Exception as e:
             print(f"[Retrieval] BM25 search failed for query '{q[:80]}': {e}")
             return []
@@ -528,6 +567,7 @@ async def get_thread_documents_retriever(
     k: int = None,
     max_total_chunks: int = 50,
     full_document_mode: bool = False,
+    facet_conditions: List[Dict[str, Any]] | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Get retriever for all documents in a thread with score-aware document diversity.
@@ -567,6 +607,7 @@ async def get_thread_documents_retriever(
         additional_queries=additional_queries,
         vector_k=max_total_chunks * 2,
         bm25_k=max_total_chunks,
+        facet_conditions=facet_conditions,
     )
 
     if not retrieved_docs:
