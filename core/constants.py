@@ -48,13 +48,19 @@ MAX_TOTAL_CHUNKS = 200  # Coverage over speed — MapReduce handles context over
 # reranker can see full parent-chunk context (parent chunks are ~1500 chars).
 RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 RERANKER_MAX_LENGTH = 2048
-# Thresholds: bge-reranker produces a more polarized score distribution than
-# ms-marco. Defaults match the previous ms-marco values so existing eval data
-# is comparable; tune via the eval suite once it's populated.
-RERANK_MIN_SCORE = 0.5            # Chunks below this are dropped (graph_nodes filter)
-RERANK_CRAG_AVG_THRESHOLD = 0.5      # avg score required for "high" CRAG confidence
-RERANK_CRAG_MEDIUM_THRESHOLD = 0.3   # avg score required for "medium" CRAG confidence
-RERANK_VLM_THRESHOLD = 0.8           # High-confidence threshold for VLM-on-page
+# Thresholds: re-tuned for bge-reranker-v2-m3 (Dec 2026). ms-marco was bimodal
+# (clear winners >0.9, losers <0.1) so a 0.8 cut was natural. bge-v2-m3 spreads
+# more — strong matches commonly sit in 0.5-0.85. The defaults below were
+# observed-distribution-driven; verify on your own corpus via the [Rerank
+# distribution] log line emitted on every retrieval.
+RERANK_MIN_SCORE = 0.3            # Chunks below this are dropped (graph_nodes filter)
+RERANK_CRAG_AVG_THRESHOLD = 0.4      # avg score required for "high" CRAG confidence
+RERANK_CRAG_MEDIUM_THRESHOLD = 0.25  # avg score required for "medium" CRAG confidence
+RERANK_VLM_THRESHOLD = 0.55          # threshold for sending a page to the answer-time VLM
+# When zero chunks cross RERANK_VLM_THRESHOLD, still fall back to the top-N
+# pages by score so VLM at least fires on the best available evidence. Set
+# to 0 to disable the fallback entirely.
+RERANK_VLM_FALLBACK_TOP_N = 1
 
 
 EASYOCR_WORKERS = (

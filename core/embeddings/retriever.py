@@ -139,7 +139,17 @@ def rerank_chunks(
         for i, chunk in enumerate(chunks):
             chunk["relevance_score"] = _sigmoid(scores[i])
 
-        print(f"Cross-encoder re-ranking completed.")
+        # Diagnostic — top-3 sigmoid'd scores per query. Helpful for tuning
+        # the bge-reranker-v2-m3 thresholds (RERANK_MIN_SCORE / VLM_THRESHOLD
+        # etc.) from observed distribution rather than guessing.
+        top3 = sorted(
+            (c["relevance_score"] for c in chunks), reverse=True
+        )[:3]
+        print(
+            f"[Rerank distribution] top-3 scores: "
+            f"{', '.join(f'{s:.3f}' for s in top3)} "
+            f"(of {len(chunks)} chunks)"
+        )
 
     except Exception as e:
         print(f"Cross-encoder re-ranking failed: {e}. Using original order.")

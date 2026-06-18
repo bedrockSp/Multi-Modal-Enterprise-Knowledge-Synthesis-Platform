@@ -951,50 +951,94 @@ def _detect_visual_reference(query: str):
 
 async def _multi_page_vlm(state: AgentState, query: str) -> str | None:
     """
-    Send high-confidence pages (rerank_score >= 0.8) to VLM concurrently.
+    Send high-confidence pages to VLM concurrently.
 
-    Deduplicates by (document_id, page_no), caps at 5 pages, renders each
-    from the source PDF, and calls VLM with the user's question.
-
-    Returns combined VLM answers with page labels, or None if no pages qualify.
+    Selection logic:
+      1. Take chunks above RERANK_VLM_THRESHOLD, dedup by (doc, page), cap to MAX_PAGES.
+      2. If nothing crosses the threshold but RERANK_VLM_FALLBACK_TOP_N > 0,
+         still send the top-N pages by score so the VLM fires on the best
+         available evidence rather than going silent. Prevents reranker
+         calibration shifts (e.g. ms-marco -> bge-v2-m3) from silently
+         disabling VLM answers.
     """
     import fitz  # PyMuPDF
 
     from core.parsers.vlm import vlm_parse_concurrent
-    from core.constants import PORT2, RERANK_VLM_THRESHOLD
+    from core.constants import (
+        PORT2,
+        RERANK_VLM_FALLBACK_TOP_N,
+        RERANK_VLM_THRESHOLD,
+    )
 
     MIN_SCORE = RERANK_VLM_THRESHOLD
     MAX_PAGES = 5
 
-    # Collect unique high-confidence pages
-    seen = set()  # (document_id, page_no)
-    page_candidates = []
-    for chunk in state.chunks:
-        score = chunk.get("rerank_score", 0.0)
-        if score < MIN_SCORE:
-            continue
+    def _candidate_from_chunk(chunk: dict) -> dict | None:
         doc_id = chunk.get("document_id", "")
         page_no = chunk.get("page_no", 1)
         file_name = chunk.get("file_name", "")
-        key = (doc_id, page_no)
-        if key in seen or not doc_id or not file_name:
-            continue
-        seen.add(key)
-        page_candidates.append({
+        if not doc_id or not file_name:
+            return None
+        return {
             "doc_id": doc_id,
             "page_no": page_no,
             "file_name": file_name,
-            "score": score,
-        })
+            "score": chunk.get("rerank_score", 0.0),
+        }
+
+    # Pass 1: chunks above the absolute threshold
+    seen = set()
+    page_candidates = []
+    for chunk in state.chunks:
+        if chunk.get("rerank_score", 0.0) < MIN_SCORE:
+            continue
+        cand = _candidate_from_chunk(chunk)
+        if cand is None:
+            continue
+        key = (cand["doc_id"], cand["page_no"])
+        if key in seen:
+            continue
+        seen.add(key)
+        page_candidates.append(cand)
         if len(page_candidates) >= MAX_PAGES:
             break
 
+    used_fallback = False
+    if not page_candidates and RERANK_VLM_FALLBACK_TOP_N > 0:
+        # Pass 2: take the top-N by score regardless of absolute threshold.
+        sorted_chunks = sorted(
+            state.chunks,
+            key=lambda c: c.get("rerank_score", 0.0),
+            reverse=True,
+        )
+        for chunk in sorted_chunks:
+            cand = _candidate_from_chunk(chunk)
+            if cand is None:
+                continue
+            key = (cand["doc_id"], cand["page_no"])
+            if key in seen:
+                continue
+            seen.add(key)
+            page_candidates.append(cand)
+            if len(page_candidates) >= RERANK_VLM_FALLBACK_TOP_N:
+                break
+        used_fallback = bool(page_candidates)
+
     if not page_candidates:
-        print("[VLM-Answer] No chunks with rerank_score >= 0.8, skipping multi-page VLM")
+        print(
+            f"[VLM-Answer] No chunks crossed threshold {MIN_SCORE:.2f} "
+            f"and no usable fallback candidates; skipping multi-page VLM"
+        )
         return None
 
-    print(f"[VLM-Answer] {len(page_candidates)} high-confidence pages for VLM: "
-          + ", ".join(f"p{c['page_no']} of {c['file_name']} (score={c['score']:.2f})" for c in page_candidates))
+    label = "fallback (top-N by score)" if used_fallback else "above-threshold"
+    print(
+        f"[VLM-Answer] {len(page_candidates)} {label} pages for VLM (threshold {MIN_SCORE:.2f}): "
+        + ", ".join(
+            f"p{c['page_no']} of {c['file_name']} (score={c['score']:.2f})"
+            for c in page_candidates
+        )
+    )
 
     # Render pages from source PDFs
     images = []
