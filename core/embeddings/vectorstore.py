@@ -388,12 +388,56 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
             except Exception as e:
                 print(f"[Facets][ingest] failed for {doc.title!r}: {e}")
 
+        # Pre-chunk every page once and stash so we don't repeat the work in
+        # the main loop. Needed up-front for the contextual-retrieval batch.
+        page_hier_cache: dict = {}
+        for page in doc.content:
+            page_hier_cache[page.number] = await asyncio.to_thread(
+                chunk_page_text_hierarchical, page.text
+            )
+
+        # Step 10 (rag-refactor): Contextual Retrieval — generate one LLM-written
+        # context blurb per child chunk and prepend it before embedding/BM25.
+        # Done at document level (not per-page) so concurrency saturates the GPU
+        # even when individual pages have only 1-2 chunks. Disabled by default
+        # — opt in via SWITCHES["CONTEXTUAL_RETRIEVAL"] when budget allows.
+        chunk_contexts: dict = {}  # keyed by chunk_id
+        if SWITCHES.get("CONTEXTUAL_RETRIEVAL", False):
+            try:
+                from core.embeddings.contextual_retrieval import generate_chunk_contexts
+
+                pairs_with_ids = []
+                for page_no, hier in page_hier_cache.items():
+                    for item in hier:
+                        cid = (
+                            f"{doc.id}_page{page_no}"
+                            f"_p{item['parent_idx']}_c{item['child_idx']}"
+                        )
+                        pairs_with_ids.append((cid, item["parent_text"], item["child_text"]))
+
+                if pairs_with_ids:
+                    pairs = [(p, c) for _, p, c in pairs_with_ids]
+                    ctxs = await generate_chunk_contexts(
+                        doc_title=doc.title,
+                        doc_summary=getattr(doc, "summary", None),
+                        chunk_pairs=pairs,
+                    )
+                    filled = 0
+                    for (cid, _, _), ctx in zip(pairs_with_ids, ctxs):
+                        if ctx:
+                            chunk_contexts[cid] = ctx
+                            filled += 1
+                    print(
+                        f"[ContextualRetrieval] {doc.title!r}: "
+                        f"{filled}/{len(pairs_with_ids)} chunks got context blurbs"
+                    )
+            except Exception as e:
+                print(f"[ContextualRetrieval] doc-level batch failed for {doc.title!r}: {e}")
+
         for page in doc.content:
             # Hierarchical chunking: child chunks are indexed; parent text is stored
             # in metadata for later expansion before LLM prompting.
-            hier_chunks = await asyncio.to_thread(
-                chunk_page_text_hierarchical, page.text
-            )
+            hier_chunks = page_hier_cache[page.number]
             # Phase 1.1: Detect section heading for this page
             heading = detect_page_heading(page.text)
             # Extract child texts for adjacent-sentence context building
@@ -420,6 +464,15 @@ async def save_documents_to_store(docs: Documents, user_id: str, thread_id: str)
                     adjacent_ctx=adjacent_ctx,
                     search_prefix=SEARCH_DOCUMENT_PREFIX,
                 )
+                # Step 10: prepend the LLM-generated context immediately after
+                # the search prefix so it participates in both embedding and BM25.
+                llm_ctx = chunk_contexts.get(child_id)
+                if llm_ctx:
+                    enriched_chunk = enriched_chunk.replace(
+                        SEARCH_DOCUMENT_PREFIX,
+                        f"{SEARCH_DOCUMENT_PREFIX}Context: {llm_ctx}\n\n",
+                        1,
+                    )
 
                 metadata = {
                     "user_id": user_id,

@@ -30,6 +30,7 @@ SWITCHES = {
     "FACET_FILTERING": True,   # Extract & apply locked query facets (fiscal_year, quarter, doc_type) as ChromaDB hard filters (rag-refactor step 5). Set False to disable.
     "TIERED_RETRIEVAL": True,  # Route focused queries (factoid/comparison/ranking) to primary child chunks only; broad queries see all tiers (rag-refactor step 7). Set False to retrieve from all tiers regardless.
     "COMMUNITY_SEARCH": True,  # Surface DocumentGraph community summaries as schema-first synthesis evidence for broad/thematic queries (rag-refactor step 8). Self-skips when no graph exists for the thread.
+    "CONTEXTUAL_RETRIEVAL": False,  # Anthropic-style LLM-generated context prefixes prepended to each chunk before embedding + BM25 (rag-refactor step 10). Adds ~1 LLM call per child chunk during ingest. Off by default — enable when GPU budget allows. Existing ingest pipeline (programmatic enrichment) keeps running underneath either way.
 }
 
 # GLM-OCR Configuration
