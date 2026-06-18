@@ -303,16 +303,27 @@ def get_user_retriever(
 
 
 def _chunk_passes_facets(meta: Dict[str, Any], facet_conditions: List[Dict[str, Any]]) -> bool:
-    """Apply a ChromaDB-style $eq facet check against a chunk's metadata. Used
-    to post-filter BM25 results, which don't run through ChromaDB's where."""
+    """Apply ChromaDB-style facet checks against a chunk's metadata. Supports
+    $eq (single value) and $in (membership). Used to post-filter BM25 results,
+    which don't run through ChromaDB's where."""
     if not facet_conditions:
         return True
     for cond in facet_conditions:
         for field, op in cond.items():
-            expected = op.get("$eq") if isinstance(op, dict) else op
             actual = meta.get(field)
-            if actual != expected:
-                return False
+            if isinstance(op, dict):
+                if "$eq" in op:
+                    if actual != op["$eq"]:
+                        return False
+                elif "$in" in op:
+                    if actual not in op["$in"]:
+                        return False
+                else:
+                    # Unknown operator — fail closed to avoid silent over-retrieval
+                    return False
+            else:
+                if actual != op:
+                    return False
     return True
 
 

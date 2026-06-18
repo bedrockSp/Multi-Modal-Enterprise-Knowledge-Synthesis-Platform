@@ -28,6 +28,7 @@ SWITCHES = {
     "QUERY_EXPANSION": True,  # Honor the decomposition LLM's requires_retrieval_expansion flag. Set False to globally disable semantic expansion regardless of LLM decision.
     "SCHEMA_SYNTHESIS": True,  # Schema-first synthesis for multi-sub-query combination (rag-refactor step 6). Set False to fall back to legacy prose-then-combine.
     "FACET_FILTERING": True,   # Extract & apply locked query facets (fiscal_year, quarter, doc_type) as ChromaDB hard filters (rag-refactor step 5). Set False to disable.
+    "TIERED_RETRIEVAL": True,  # Route focused queries (factoid/comparison/ranking) to primary child chunks only; broad queries see all tiers (rag-refactor step 7). Set False to retrieve from all tiers regardless.
 }
 
 # GLM-OCR Configuration

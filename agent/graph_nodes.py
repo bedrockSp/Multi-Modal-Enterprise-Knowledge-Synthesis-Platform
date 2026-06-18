@@ -123,7 +123,7 @@ async def retriever(state: AgentState) -> AgentState:
     # Step 5 (rag-refactor): extract locked facets ONCE per query and reuse on
     # CRAG retries. Hard-filters the vector + BM25 retrieval at the source so
     # constraints like FY24 cannot be relaxed by later query refinement.
-    facet_conditions = None
+    facet_conditions = []
     if SWITCHES.get("FACET_FILTERING", True):
         if state.query_facets is None:
             try:
@@ -154,6 +154,29 @@ async def retriever(state: AgentState) -> AgentState:
                     print(f"[Facets][query] reusing locked facets on retry: {state.query_facets}")
             except Exception as e:
                 print(f"[Facets][query] failed to rebuild from state: {e}")
+
+    # Step 7 (rag-refactor): tier routing. Focused answer classes (factoid,
+    # comparison, ranking) restrict retrieval to primary `child` chunks so
+    # synthetic summary/profile chunks can't outrank precise evidence. Broad
+    # classes (narrative, enumeration, etc.) get all tiers as before.
+    if SWITCHES.get("TIERED_RETRIEVAL", True):
+        try:
+            from core.embeddings.tiers import (
+                select_tiers_for_answer_class,
+                tiers_to_chroma_condition,
+            )
+
+            tiers = select_tiers_for_answer_class(state.answer_class)
+            tier_cond = tiers_to_chroma_condition(tiers)
+            if tier_cond is not None:
+                facet_conditions = list(facet_conditions or []) + [tier_cond]
+                print(f"[Tiers] answer_class={state.answer_class!r} -> {tiers}")
+        except Exception as e:
+            print(f"[Tiers] selection failed: {e}, using all tiers")
+
+    # Empty list signals "no extra conditions" to the retriever.
+    if not facet_conditions:
+        facet_conditions = None
 
     retrieved_docs = await get_thread_documents_retriever(
         user_id=state.user_id,
