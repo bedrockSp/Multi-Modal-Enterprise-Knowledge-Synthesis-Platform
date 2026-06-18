@@ -313,6 +313,24 @@ async def query(request: Request, body: QueryRequest):
             print(f"[Combination] Deduplicated chunks: {len(chunks)} → {len(deduped_chunks)}")
         chunks = deduped_chunks
 
+        # Step 8 (rag-refactor): pull community summaries from the DocumentGraph
+        # if one exists for this thread. self-skips on focused answer classes,
+        # missing graph, or zero-overlap with the query.
+        community_records: list = []
+        if SWITCHES.get("COMMUNITY_SEARCH", True):
+            try:
+                from agent.synthesis.community_search import community_search
+
+                records = await community_search(
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    query=question,
+                    answer_class=getattr(decomposition_result, "answer_class", "narrative"),
+                )
+                community_records = [r.model_dump() for r in records]
+            except Exception as e:
+                print(f"[Community Search] failed: {e}")
+
         cs = time.time()
         is_generative = detect_answer_style(question) == "generative"
         answer = await combination_node(
@@ -320,6 +338,7 @@ async def query(request: Request, body: QueryRequest):
             chunks=chunks,
             generative_mode=is_generative,
             answer_class=getattr(decomposition_result, "answer_class", "narrative"),
+            community_records=community_records,
         )
         ce = time.time() - cs
         print(f"Subqueries combination time: {ce:.2f} seconds (generative={is_generative})")

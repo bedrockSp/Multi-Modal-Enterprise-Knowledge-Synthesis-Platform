@@ -78,7 +78,9 @@ async def _extract_one(
 
 
 async def extract_records(
-    sub_answers: List[Dict], chunks: List[Dict]
+    sub_answers: List[Dict],
+    chunks: List[Dict],
+    pre_built_records: List[EvidenceRecord] | None = None,
 ) -> List[SubAnswerRecords]:
     """
     Run record extraction over all sub-answers with bounded concurrency.
@@ -88,20 +90,35 @@ async def extract_records(
             existing query route.
         chunks: globally-deduped chunk set produced by the route before
             combination. Used to choose the most relevant subset per sub-query.
+        pre_built_records: optional list of EvidenceRecords already in schema
+            form (e.g. from DocumentGraph community summaries, step 8). These
+            skip the LLM extraction pass and are appended as a synthetic
+            SubAnswerRecords entry so reconciliation can dedup against them.
 
     Returns:
-        List[SubAnswerRecords] in the same order as `sub_answers`.
+        List[SubAnswerRecords] in the same order as `sub_answers`, optionally
+        with one trailing entry for pre-built records.
     """
-    if not sub_answers:
-        return []
+    extractions: List[SubAnswerRecords] = []
 
-    sem = asyncio.Semaphore(_PARALLEL_EXTRACTIONS)
+    if sub_answers:
+        sem = asyncio.Semaphore(_PARALLEL_EXTRACTIONS)
 
-    async def _bounded(item):
-        async with sem:
-            sub_query = item.get("sub_query", "")
-            sub_answer = item.get("sub_answer", "") or ""
-            relevant = _filter_chunks_for_subquery(sub_query, chunks)
-            return await _extract_one(sub_query, sub_answer, relevant)
+        async def _bounded(item):
+            async with sem:
+                sub_query = item.get("sub_query", "")
+                sub_answer = item.get("sub_answer", "") or ""
+                relevant = _filter_chunks_for_subquery(sub_query, chunks)
+                return await _extract_one(sub_query, sub_answer, relevant)
 
-    return await asyncio.gather(*[_bounded(item) for item in sub_answers])
+        extractions = await asyncio.gather(*[_bounded(item) for item in sub_answers])
+
+    if pre_built_records:
+        extractions.append(
+            SubAnswerRecords(
+                sub_query="Corpus-level themes (DocumentGraph community summaries)",
+                records=list(pre_built_records),
+            )
+        )
+
+    return extractions

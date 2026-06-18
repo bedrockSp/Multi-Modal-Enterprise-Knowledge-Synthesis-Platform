@@ -9,6 +9,7 @@ async def combination_node(
     chunks: list | None = None,
     generative_mode: bool = False,
     answer_class: str | None = None,
+    community_records: list | None = None,
 ) -> str:
     """
     Synthesize multiple sub-answers into one final answer.
@@ -18,20 +19,26 @@ async def combination_node(
     reconcile globally -> render via canonical template selected by
     answer_class. Falls back to the legacy prose combination on extraction
     failure or when generative_mode is set (scripts/decks etc.).
+
+    `community_records` (step 8): optional list of pre-structured EvidenceRecord
+    dicts derived from DocumentGraph community summaries. These get appended
+    to the record pool as a synthetic sub-answer entry — they participate in
+    reconciliation/rendering but skip the LLM extraction pass.
     """
     use_schema = (
         SWITCHES.get("SCHEMA_SYNTHESIS", True)
         and not generative_mode
-        and sub_answers
+        and (sub_answers or community_records)
     )
     if use_schema:
         try:
             return await _schema_synthesis(
-                sub_answers=sub_answers,
+                sub_answers=sub_answers or [],
                 resolved_query=resolved_query or original_query,
                 original_query=original_query,
                 chunks=chunks or [],
                 answer_class=answer_class or "narrative",
+                community_records=community_records,
             )
         except Exception as e:
             print(f"[Synthesis] schema-first path failed: {e}; falling back to prose combine")
@@ -60,13 +67,27 @@ async def _schema_synthesis(
     original_query: str,
     chunks: list,
     answer_class: str,
+    community_records: list | None = None,
 ) -> str:
     """Run extract -> reconcile -> render."""
     from agent.synthesis.extract import extract_records
     from agent.synthesis.reconcile import reconcile, to_render_payload
     from agent.synthesis.render import render
+    from core.llm.output_schemas.synthesis_outputs import EvidenceRecord
 
-    extractions = await extract_records(sub_answers, chunks)
+    pre_built = None
+    if community_records:
+        pre_built = []
+        for rec in community_records:
+            try:
+                if isinstance(rec, EvidenceRecord):
+                    pre_built.append(rec)
+                else:
+                    pre_built.append(EvidenceRecord.model_validate(rec))
+            except Exception as e:
+                print(f"[Synthesis] dropping malformed community record: {e}")
+
+    extractions = await extract_records(sub_answers, chunks, pre_built_records=pre_built)
     total_records = sum(len(e.records) for e in extractions)
     print(f"[Synthesis] extracted {total_records} records from {len(extractions)} sub-answers")
 
