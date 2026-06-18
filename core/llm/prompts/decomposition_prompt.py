@@ -20,13 +20,14 @@ You are an expert at query decomposition for a Retrieval-Augmented Generation (R
 
 Schema:
 {
-  "requires_decomposition":        <bool>,
-  "resolved_query":                <string>,    // query after context resolution
-  "sub_queries":                   <string[]>,  // 1-10 standalone sub queries
-  "requires_retrieval_expansion":  <bool>,      // true only when expansion is warranted (see below)
-  "retrieval_queries":             <string[]>,  // 2-3 semantic search variants — empty unless expansion is warranted
-  "answer_class":                  <string>,    // shape of the expected answer (see classification rules below)
-  "requires_full_data":            <bool>       // true if the question needs NLP analysis of ALL text rows
+  "requires_decomposition":          <bool>,
+  "resolved_query":                  <string>,    // query after context resolution
+  "sub_queries":                     <string[]>,  // 1-10 standalone sub queries
+  "requires_retrieval_expansion":    <bool>,      // true only when expansion is warranted (see below)
+  "retrieval_queries":               <string[]>,  // 2-3 semantic search variants — empty unless expansion is warranted
+  "answer_class":                    <string>,    // shape of the expected answer (see classification rules below)
+  "requires_prior_answer_context":   <bool>,      // true ONLY when the user refers to the prior ASSISTANT MESSAGE itself (see rules below)
+  "requires_full_data":              <bool>       // true if the question needs NLP analysis of ALL text rows
 }
 
 ⸻
@@ -121,6 +122,34 @@ Examples:
 
 ⸻
 
+Prior-Answer Context Classification (perform BEFORE answer class)
+
+Set requires_prior_answer_context to TRUE ONLY when the user's question
+refers to the previous ASSISTANT MESSAGE itself — not just the prior topic.
+The downstream system already resolves pronouns into a self-contained
+resolved_query, so topic continuity does NOT require this flag.
+
+Set TRUE for queries like:
+    • "Explain that more" / "Tell me more about that" / "Expand on what you said"
+    • "Why?" / "How?" as a standalone follow-up to a factual answer
+    • "Is that correct?" / "Are you sure?" / "Did you misread the data?"
+    • "Can you simplify what you just said?" / "Shorter version of that"
+    • "Compare to what you said earlier" / "How does this relate to your last answer?"
+    • "Did you cover X in that answer?" (asks about the prior answer's coverage)
+
+Set FALSE for everything else, including:
+    • Pronoun follow-ups about a prior TOPIC — "What is their revenue?" after
+      asking about a company. The resolved_query will spell out the entity;
+      no need to leak the prior assistant prose into this turn.
+    • Quantifier follow-ups — "and Q4?" after "What was Q3?". Same reasoning.
+    • Any standalone question that does not reference the assistant's prior
+      output.
+
+When in doubt, FALSE. Including stale prior-answer prose risks anchoring the
+model on old facts instead of fresh retrieval.
+
+⸻
+
 Answer Class Classification (perform LAST)
 
 Classify the OVERALL answer shape into one of these classes — this drives how
@@ -140,6 +169,7 @@ Output rules
     3. Otherwise, produce 2-10 self-contained questions; avoid pronouns and shared context.
     4. Set requires_retrieval_expansion per the rules above; if false, retrieval_queries MUST be [].
     5. Set answer_class per the classification rules above; default to "narrative" if uncertain.
+    6. Set requires_prior_answer_context per the rules above; default false when in doubt.
 
 ⸻
 """
@@ -336,6 +366,48 @@ query: “Explain both modules.”
   “requires_retrieval_expansion”: false,
   “retrieval_queries”: [],
   “answer_class”: “multi_entity_summary”
+}
+
+Prior-Answer follow-up (asks about the assistant's last answer itself)
+chat_history: “FY24 revenue was $2.4B per the earnings deck, up 18% YoY.”
+query: “Why?”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “What drove the 18% YoY revenue growth in FY24?”,
+  “sub_queries”: [“What drove the 18% YoY revenue growth in FY24?”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “narrative”,
+  “requires_prior_answer_context”: true
+}
+
+Prior-Answer follow-up (elaboration request on the previous answer)
+chat_history: “Acme rolled out the new payroll system to all 7 regions in FY24.”
+query: “Explain that more.”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “Explain the Acme payroll system rollout across all 7 regions in FY24 in more detail”,
+  “sub_queries”: [“Explain the Acme payroll system rollout across all 7 regions in FY24 in more detail”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “narrative”,
+  “requires_prior_answer_context”: true
+}
+
+Topic follow-up (NOT prior-answer; resolved_query handles it)
+chat_history: “Nvidia's Q3 revenue was $35B.”
+query: “What about Q4?”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “What was Nvidia's Q4 revenue?”,
+  “sub_queries”: [“What was Nvidia's Q4 revenue?”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “factoid”,
+  “requires_prior_answer_context”: false
 }
 Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
 CRITICAL JSON RULES:

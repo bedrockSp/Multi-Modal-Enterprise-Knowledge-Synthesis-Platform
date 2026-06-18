@@ -626,13 +626,35 @@ def main_prompt(
                 }
             )
 
-    # ── Conversation history (disabled — messages is always empty now) ──
+    # ── Conversation history — Layer 3 segregation framing ──
+    # `messages` here is the curated prior_chat_context from AgentState — at
+    # most one user+assistant pair, populated ONLY when the decomposition LLM
+    # judged the user is referring to the prior assistant answer (not just the
+    # prior topic). The bookend system messages stop the model from treating
+    # the prior assistant content as ground truth — it must still answer the
+    # CURRENT question from the document evidence below, not from prior prose.
     if messages:
+        contents.append({
+            "role": "system",
+            "parts": (
+                "PRIOR EXCHANGE (for topical context only — the current question MUST "
+                "be answered from the document evidence below, NOT from the prior "
+                "assistant message). The prior assistant message may contain stale "
+                "facts; verify against the documents before reusing any value."
+            ),
+        })
         for m in messages:
             if m.type == "human":
-                contents.append({"role": "user", "parts": m.content})
+                contents.append({"role": "user", "parts": f"[prior] {m.content}"})
             elif m.type == "ai":
-                contents.append({"role": "assistant", "parts": m.content})
+                contents.append({"role": "assistant", "parts": f"[prior] {m.content}"})
+        contents.append({
+            "role": "system",
+            "parts": (
+                "END OF PRIOR EXCHANGE. Now answer the CURRENT question using the "
+                "documents below as your primary source."
+            ),
+        })
 
     # ── Summary context ──
     if summary:

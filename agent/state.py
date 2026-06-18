@@ -130,3 +130,17 @@ class AgentState(BaseModel):
         default=None,
         description="Locked retrieval facets (fiscal_year, quarter, calendar_year, doc_type). Stored as dict for state serialization compatibility.",
     )
+
+    # Chat-context refactor (Layer 1 + 3): decomposition classifies whether the
+    # user is referring to the PRIOR ASSISTANT ANSWER (not just the topic). When
+    # True AND use_context is on, the route populates prior_chat_context with
+    # exactly the last user+assistant turn for injection under Layer 3
+    # segregation framing in main_prompt. Empty list otherwise.
+    requires_prior_answer_context: bool = Field(
+        default=False,
+        description="From decomposition: True when the user's question references the prior assistant message specifically.",
+    )
+    prior_chat_context: List[BaseMessage] = Field(
+        default_factory=list,
+        description="Clean prior user+assistant turns for Layer 3 segregated injection. Capped to 2 messages (one pair).",
+    )

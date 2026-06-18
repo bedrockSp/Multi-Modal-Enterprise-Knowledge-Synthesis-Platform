@@ -78,6 +78,21 @@ async def query(request: Request, body: QueryRequest):
     # every LLM call with the entire conversation history.
     AGENT_HISTORY_LIMIT = 6  # last 3 user/agent turns
     agent_history = messages[-AGENT_HISTORY_LIMIT:] if messages else []
+
+    def _resolve_prior_chat_context(decomp_result, history):
+        """
+        Layer 1 + 3 chat-context refactor: include the prior user+assistant
+        turn ONLY when decomposition judged the user is asking about the
+        prior assistant message (not just the prior topic). Always honours
+        the user-facing use_context override — if that is off, we never
+        include prior context regardless of the classifier.
+        """
+        if not use_context or not history:
+            return []
+        needs = getattr(decomp_result, "requires_prior_answer_context", False)
+        if not needs:
+            return []
+        return list(history[-2:])
     chunks = []
     chunks_used = []
     confidence_scores = []
@@ -180,6 +195,8 @@ async def query(request: Request, body: QueryRequest):
                         requires_full_data=getattr(decomposition_result, "requires_full_data", False),
                         requires_retrieval_expansion=getattr(decomposition_result, "requires_retrieval_expansion", False),
                         retrieval_queries=getattr(decomposition_result, "retrieval_queries", []),
+                        requires_prior_answer_context=getattr(decomposition_result, "requires_prior_answer_context", False),
+                        prior_chat_context=_resolve_prior_chat_context(decomposition_result, agent_history),
                     )
                 )
 

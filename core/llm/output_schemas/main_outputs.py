@@ -207,6 +207,21 @@ class DecompositionLLMOutput(LLMOutputBase):
             "'ranking' (sorted by metric), 'narrative' (free-form prose, default)."
         ),
     )
+    requires_prior_answer_context: bool = Field(
+        default=False,
+        description=(
+            "Set true ONLY when the user's question references the PRIOR ASSISTANT "
+            "MESSAGE specifically (not just the prior topic). Examples that should "
+            "be true: 'Explain that more', 'Why?' as a standalone question, "
+            "'Is that correct?', 'Can you simplify what you just said?', "
+            "'Compare to what you said earlier'. Examples that should stay false: "
+            "'What about Q4?' (a topic continuation — context_resolution handles it), "
+            "'What is their address?' (still a topic continuation), 'Tell me about "
+            "Microsoft' (new topic). Default false — most follow-ups are about the "
+            "topic, and including the prior assistant message risks anchoring the "
+            "answer on stale facts instead of fresh retrieval."
+        ),
+    )
     requires_full_data: bool = Field(
         default=False,
         description=(
