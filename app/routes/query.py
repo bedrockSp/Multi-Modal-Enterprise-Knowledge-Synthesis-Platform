@@ -89,10 +89,16 @@ async def query(request: Request, body: QueryRequest):
         """
         if not use_context or not history:
             return []
-        needs = getattr(decomp_result, "requires_prior_answer_context", False)
-        if not needs:
+        mode = getattr(decomp_result, "prior_answer_mode", "none")
+        if mode not in ("reasoning", "reformat"):
             return []
         return list(history[-2:])
+
+    def _resolve_prior_answer_mode(decomp_result):
+        if not use_context:
+            return "none"
+        mode = getattr(decomp_result, "prior_answer_mode", "none")
+        return mode if mode in ("reasoning", "reformat") else "none"
     chunks = []
     chunks_used = []
     confidence_scores = []
@@ -195,7 +201,7 @@ async def query(request: Request, body: QueryRequest):
                         requires_full_data=getattr(decomposition_result, "requires_full_data", False),
                         requires_retrieval_expansion=getattr(decomposition_result, "requires_retrieval_expansion", False),
                         retrieval_queries=getattr(decomposition_result, "retrieval_queries", []),
-                        requires_prior_answer_context=getattr(decomposition_result, "requires_prior_answer_context", False),
+                        prior_answer_mode=_resolve_prior_answer_mode(decomposition_result),
                         prior_chat_context=_resolve_prior_chat_context(decomposition_result, agent_history),
                     )
                 )

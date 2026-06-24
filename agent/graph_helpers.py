@@ -35,6 +35,7 @@ def build_main_prompt(state: AgentState):
 
     return main_prompt(
         messages=state.prior_chat_context,
+        prior_answer_mode=state.prior_answer_mode,
         chunks=state.chunks,
         question=state.query or state.resolved_query or state.original_query,
         summary=state.summary,

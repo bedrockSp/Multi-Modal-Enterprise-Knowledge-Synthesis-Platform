@@ -207,19 +207,25 @@ class DecompositionLLMOutput(LLMOutputBase):
             "'ranking' (sorted by metric), 'narrative' (free-form prose, default)."
         ),
     )
-    requires_prior_answer_context: bool = Field(
-        default=False,
+    prior_answer_mode: str = Field(
+        default="none",
         description=(
-            "Set true ONLY when the user's question references the PRIOR ASSISTANT "
-            "MESSAGE specifically (not just the prior topic). Examples that should "
-            "be true: 'Explain that more', 'Why?' as a standalone question, "
-            "'Is that correct?', 'Can you simplify what you just said?', "
-            "'Compare to what you said earlier'. Examples that should stay false: "
-            "'What about Q4?' (a topic continuation — context_resolution handles it), "
-            "'What is their address?' (still a topic continuation), 'Tell me about "
-            "Microsoft' (new topic). Default false — most follow-ups are about the "
-            "topic, and including the prior assistant message risks anchoring the "
-            "answer on stale facts instead of fresh retrieval."
+            "Three modes:\n"
+            "  - 'none' (default): standalone question or topic continuation. Do NOT "
+            "    inject the prior assistant message. The resolved_query already handles "
+            "    topical continuity for follow-ups like 'what about Q4?'.\n"
+            "  - 'reasoning': the user is asking the system to think MORE about the "
+            "    prior assistant message — verify it, explain it, justify it. Examples: "
+            "    'Why?', 'Is that correct?', 'Explain that more', 'How do you know?'. "
+            "    The downstream prompt frames the prior message as TOPIC context only "
+            "    and tells the LLM to answer from documents, verifying as needed.\n"
+            "  - 'reformat': the user wants the prior assistant message TRANSFORMED. "
+            "    Examples: 'Give that in tabular format', 'Make it shorter', 'Convert "
+            "    to bullet points', 'Summarize what you just said', 'Translate that to "
+            "    Spanish', 'Just the names please'. The downstream prompt frames the "
+            "    prior message as the PRIMARY SOURCE CONTENT and tells the LLM to apply "
+            "    the user's transformation — documents are only for filling gaps.\n"
+            "Default 'none' when in doubt — including stale prior prose risks anchoring."
         ),
     )
     requires_full_data: bool = Field(

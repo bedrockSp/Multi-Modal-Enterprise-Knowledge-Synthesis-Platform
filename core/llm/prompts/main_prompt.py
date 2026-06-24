@@ -450,6 +450,7 @@ def main_prompt(
     sql_batched_answer: Optional[str] = None,
     doc_batched_answer: Optional[str] = None,
     vlm_visual_answer: Optional[str] = None,
+    prior_answer_mode: str = "none",
 ):
     contents = []
 
@@ -629,32 +630,48 @@ def main_prompt(
     # ── Conversation history — Layer 3 segregation framing ──
     # `messages` here is the curated prior_chat_context from AgentState — at
     # most one user+assistant pair, populated ONLY when the decomposition LLM
-    # judged the user is referring to the prior assistant answer (not just the
-    # prior topic). The bookend system messages stop the model from treating
-    # the prior assistant content as ground truth — it must still answer the
-    # CURRENT question from the document evidence below, not from prior prose.
+    # decided this is a follow-up that refers to the prior assistant answer.
+    # The framing depends on prior_answer_mode:
+    #   'reasoning' — user wants the system to think more (why?, is that right?).
+    #                 Prior is TOPIC context only; documents are ground truth.
+    #   'reformat'  — user wants the prior answer TRANSFORMED (table, shorter,
+    #                 bullets, translated). Prior IS the primary source content;
+    #                 documents are only for filling gaps or verifying numbers.
     if messages:
-        contents.append({
-            "role": "system",
-            "parts": (
+        if prior_answer_mode == "reformat":
+            opener = (
+                "PRIOR EXCHANGE (this is the SOURCE CONTENT the user wants transformed). "
+                "The user's current question requests a REFORMATTING or RESTATEMENT of the "
+                "prior assistant message — preserve its substance and apply the requested "
+                "transformation (table / bullets / shorter / translation / etc.). The "
+                "documents below are available to FILL GAPS or VERIFY SPECIFIC FACTS, but "
+                "the prior assistant message is the primary content to work from. Do NOT "
+                "substitute different content from the documents that wasn't in the prior "
+                "answer just because it's also relevant."
+            )
+            closer = (
+                "END OF PRIOR EXCHANGE. Now apply the user's requested transformation "
+                "to the prior assistant content."
+            )
+        else:  # 'reasoning' (default when messages are present)
+            opener = (
                 "PRIOR EXCHANGE (for topical context only — the current question MUST "
                 "be answered from the document evidence below, NOT from the prior "
                 "assistant message). The prior assistant message may contain stale "
                 "facts; verify against the documents before reusing any value."
-            ),
-        })
+            )
+            closer = (
+                "END OF PRIOR EXCHANGE. Now answer the CURRENT question using the "
+                "documents below as your primary source."
+            )
+
+        contents.append({"role": "system", "parts": opener})
         for m in messages:
             if m.type == "human":
                 contents.append({"role": "user", "parts": f"[prior] {m.content}"})
             elif m.type == "ai":
                 contents.append({"role": "assistant", "parts": f"[prior] {m.content}"})
-        contents.append({
-            "role": "system",
-            "parts": (
-                "END OF PRIOR EXCHANGE. Now answer the CURRENT question using the "
-                "documents below as your primary source."
-            ),
-        })
+        contents.append({"role": "system", "parts": closer})
 
     # ── Summary context ──
     if summary:

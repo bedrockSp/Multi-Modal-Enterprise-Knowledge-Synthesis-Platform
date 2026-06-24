@@ -26,7 +26,7 @@ Schema:
   "requires_retrieval_expansion":    <bool>,      // true only when expansion is warranted (see below)
   "retrieval_queries":               <string[]>,  // 2-3 semantic search variants — empty unless expansion is warranted
   "answer_class":                    <string>,    // shape of the expected answer (see classification rules below)
-  "requires_prior_answer_context":   <bool>,      // true ONLY when the user refers to the prior ASSISTANT MESSAGE itself (see rules below)
+  "prior_answer_mode":               <string>,    // "none" | "reasoning" | "reformat" — see rules below
   "requires_full_data":              <bool>       // true if the question needs NLP analysis of ALL text rows
 }
 
@@ -122,31 +122,48 @@ Examples:
 
 ⸻
 
-Prior-Answer Context Classification (perform BEFORE answer class)
+Prior-Answer Mode Classification (perform BEFORE answer class)
 
-Set requires_prior_answer_context to TRUE ONLY when the user's question
-refers to the previous ASSISTANT MESSAGE itself — not just the prior topic.
-The downstream system already resolves pronouns into a self-contained
-resolved_query, so topic continuity does NOT require this flag.
+Decide HOW the user is using the previous assistant message — three modes:
 
-Set TRUE for queries like:
-    • "Explain that more" / "Tell me more about that" / "Expand on what you said"
-    • "Why?" / "How?" as a standalone follow-up to a factual answer
-    • "Is that correct?" / "Are you sure?" / "Did you misread the data?"
-    • "Can you simplify what you just said?" / "Shorter version of that"
-    • "Compare to what you said earlier" / "How does this relate to your last answer?"
-    • "Did you cover X in that answer?" (asks about the prior answer's coverage)
+"none"  (default)
+    The user is asking a standalone question or a TOPIC follow-up (pronouns,
+    quantifiers like "and Q4?"). The resolved_query will spell out the
+    entity/scope explicitly, so the prior assistant prose is not needed.
+    Examples:
+      • "What about Q4?"           (resolved → "What was the revenue in Q4?")
+      • "What is their address?"   (resolved with antecedent from history)
+      • "Tell me about Microsoft"  (new topic, no prior reference)
 
-Set FALSE for everything else, including:
-    • Pronoun follow-ups about a prior TOPIC — "What is their revenue?" after
-      asking about a company. The resolved_query will spell out the entity;
-      no need to leak the prior assistant prose into this turn.
-    • Quantifier follow-ups — "and Q4?" after "What was Q3?". Same reasoning.
-    • Any standalone question that does not reference the assistant's prior
-      output.
+"reasoning"
+    The user is asking the system to think MORE about the prior answer —
+    verify it, explain it, justify it. The downstream prompt treats the
+    prior message as topic context only and tells the LLM to answer from
+    documents, verifying as needed.
+    Examples:
+      • "Why?" / "How?" as a standalone follow-up to a factual answer
+      • "Is that correct?" / "Are you sure?" / "Did you misread the data?"
+      • "How do you know?" / "What's the source for that?"
+      • "Compare to what you said earlier" / "Does this contradict the Q3 answer?"
+      • "Did you cover X in that answer?" (about the prior answer's coverage)
 
-When in doubt, FALSE. Including stale prior-answer prose risks anchoring the
-model on old facts instead of fresh retrieval.
+"reformat"
+    The user wants the prior assistant message TRANSFORMED — same substance,
+    different shape. The downstream prompt frames the prior message as the
+    PRIMARY SOURCE CONTENT and tells the LLM to apply the requested
+    transformation. Documents are only for filling gaps.
+    Examples:
+      • "Give that in tabular format" / "Make it a table"
+      • "Make it shorter" / "Just the names please" / "TL;DR"
+      • "Convert to bullet points" / "Outline form"
+      • "Summarize what you just said" / "Just the conclusion"
+      • "Translate that to Spanish" / "In simpler language"
+      • "Explain that more" / "Expand on what you said" (more detail on same content)
+
+When in doubt, choose "none". Including stale prior-answer prose under the
+wrong framing risks either anchoring on stale facts (reasoning framing applied
+to a topic shift) or substituting unrelated retrieved content (reformat framing
+applied to a topic shift).
 
 ⸻
 
@@ -169,7 +186,7 @@ Output rules
     3. Otherwise, produce 2-10 self-contained questions; avoid pronouns and shared context.
     4. Set requires_retrieval_expansion per the rules above; if false, retrieval_queries MUST be [].
     5. Set answer_class per the classification rules above; default to "narrative" if uncertain.
-    6. Set requires_prior_answer_context per the rules above; default false when in doubt.
+    6. Set prior_answer_mode per the rules above; default "none" when in doubt.
 
 ⸻
 """
@@ -368,7 +385,7 @@ query: “Explain both modules.”
   “answer_class”: “multi_entity_summary”
 }
 
-Prior-Answer follow-up (asks about the assistant's last answer itself)
+Reasoning follow-up (asks why / how — verify the prior answer)
 chat_history: “FY24 revenue was $2.4B per the earnings deck, up 18% YoY.”
 query: “Why?”
 
@@ -379,24 +396,38 @@ query: “Why?”
   “requires_retrieval_expansion”: false,
   “retrieval_queries”: [],
   “answer_class”: “narrative”,
-  “requires_prior_answer_context”: true
+  “prior_answer_mode”: “reasoning”
 }
 
-Prior-Answer follow-up (elaboration request on the previous answer)
-chat_history: “Acme rolled out the new payroll system to all 7 regions in FY24.”
-query: “Explain that more.”
+Reformat follow-up (transform the prior answer into a different shape)
+chat_history: “Here is the product roadmap across the years: FY22 launched X, Y, Z; FY23 expanded to A, B; FY24 added C and D milestones.”
+query: “Give that in tabular format”
 
 {
   “requires_decomposition”: false,
-  “resolved_query”: “Explain the Acme payroll system rollout across all 7 regions in FY24 in more detail”,
-  “sub_queries”: [“Explain the Acme payroll system rollout across all 7 regions in FY24 in more detail”],
+  “resolved_query”: “Present the product roadmap across the years in tabular format”,
+  “sub_queries”: [“Present the product roadmap across the years in tabular format”],
   “requires_retrieval_expansion”: false,
   “retrieval_queries”: [],
-  “answer_class”: “narrative”,
-  “requires_prior_answer_context”: true
+  “answer_class”: “timeline”,
+  “prior_answer_mode”: “reformat”
 }
 
-Topic follow-up (NOT prior-answer; resolved_query handles it)
+Reformat follow-up (shorter restatement)
+chat_history: “Acme rolled out the new payroll system to all 7 regions in FY24 with phased adoption across Q1-Q3.”
+query: “Just the bullet points please”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “Present the Acme FY24 payroll system rollout as bullet points”,
+  “sub_queries”: [“Present the Acme FY24 payroll system rollout as bullet points”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “enumeration”,
+  “prior_answer_mode”: “reformat”
+}
+
+Topic follow-up (NOT prior-answer; resolved_query handles it — mode stays "none")
 chat_history: “Nvidia's Q3 revenue was $35B.”
 query: “What about Q4?”
 
@@ -407,7 +438,7 @@ query: “What about Q4?”
   “requires_retrieval_expansion”: false,
   “retrieval_queries”: [],
   “answer_class”: “factoid”,
-  “requires_prior_answer_context”: false
+  “prior_answer_mode”: “none”
 }
 Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
 CRITICAL JSON RULES:
