@@ -19,7 +19,8 @@ class AnswerClass(str, Enum):
     """Coarse answer shape — drives the renderer template."""
 
     FACTOID = "factoid"                          # single fact: who/what/when/where lookups
-    COMPARISON = "comparison"                    # 2+ entities side-by-side
+    COMPARISON = "comparison"                    # 2+ entities side-by-side table
+    TABULAR = "tabular"                          # generic HTML table — explicit "as a table" request that isn't entity-vs-entity
     TIMELINE = "timeline"                        # events ordered by time
     ENUMERATION = "enumeration"                  # list of items (pros/cons, modules, features)
     ACHIEVEMENTS_BY_PERIOD = "achievements_by_period"  # accomplishments grouped by entity x period

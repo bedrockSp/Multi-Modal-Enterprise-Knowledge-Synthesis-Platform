@@ -208,12 +208,25 @@ Classify the OVERALL answer shape into one of these classes — this drives how
 the multi-sub-query synthesizer renders the final answer:
     • "factoid"                — single fact lookup (who/what/when/where + one entity)
     • "comparison"             — 2+ entities compared side-by-side (revenue of A vs B vs C, pros vs cons)
-    • "timeline"               — events ordered by time, history, evolution
+    • "tabular"                — user explicitly asked for a TABLE that is NOT an entity-vs-entity
+                                 comparison. Pick this for: "give that in tabular format" / "as a
+                                 table" / "table form" when the content is e.g. a roadmap, a list
+                                 of items with multiple attributes, a schedule, a metrics dump.
+                                 Prefer "comparison" when the table compares 2+ entities, "ranking"
+                                 when sorted by a metric. Otherwise use "tabular".
+    • "timeline"               — events ordered by time, history, evolution (rendered as a
+                                 chronological list, not a table — use "tabular" for table form)
     • "enumeration"            — list of items (pros, cons, modules, features) with no time/entity grouping
     • "achievements_by_period" — accomplishments grouped by entity AND time period (e.g. "What did X achieve in FY24?")
     • "multi_entity_summary"   — summarize each of multiple entities (e.g. "Tell me about each team")
     • "ranking"                — sorted by metric/value (top N, biggest, fastest)
     • "narrative"              — free-form prose (default if nothing else applies)
+
+When prior_answer_mode is "reformat", the user's EXPLICIT format request in the
+query is what drives answer_class — NOT the semantic shape of the prior content.
+    "give that in tabular format"   → answer_class = "tabular"
+    "as a bulleted list"            → answer_class = "enumeration"
+    "shorter please" / "translate"  → answer_class = "narrative" (no shape change)
 
 Output rules
     1. Use resolved_query—not the raw query—to decide on decomposition.
@@ -444,7 +457,7 @@ query: “Give that in tabular format”
   “sub_queries”: [“Present the product roadmap across the years in tabular format”],
   “requires_retrieval_expansion”: false,
   “retrieval_queries”: [],
-  “answer_class”: “timeline”,
+  “answer_class”: “tabular”,
   “prior_answer_mode”: “reformat”
 }
 

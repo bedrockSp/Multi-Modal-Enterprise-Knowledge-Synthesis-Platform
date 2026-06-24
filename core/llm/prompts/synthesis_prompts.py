@@ -103,6 +103,15 @@ RECORDS (JSON):
             "the metrics/aspects as rows. Group records by entity. Below the table, "
             "add a 1-2 sentence summary highlighting the most important differences."
         ),
+        "tabular": (
+            "Render as an HTML <table>. Choose columns by inspecting which record "
+            "fields are populated across the records (typical choices: entity, "
+            "metric, value, time_period, source_doc). Use the field name as the "
+            "column header. One row per record. Sort rows in a logical order — "
+            "by time_period chronologically if present, by entity alphabetically "
+            "otherwise. Include a 'Source' column with `[<source_doc>, p.<source_page>]`. "
+            "Below the table, add a 1-2 sentence note describing what the table shows."
+        ),
         "timeline": (
             "Render as a chronological list grouped by `time_period`. Use `## "
             "<time_period>` headings sorted oldest-to-newest. Within each period, "
