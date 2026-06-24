@@ -160,6 +160,41 @@ Decide HOW the user is using the previous assistant message — three modes:
       • "Translate that to Spanish" / "In simpler language"
       • "Explain that more" / "Expand on what you said" (more detail on same content)
 
+"correction"
+    The user is correcting a specific claim in the prior assistant message.
+    The user's input is treated as AUTHORITATIVE for the corrected fact.
+    Examples:
+      • "Actually it was FY24 not FY23"
+      • "No, the CEO is Jane Smith not John"
+      • "You misread the table — the revenue is $2.6B not $2.4B"
+      • "That's wrong, X reports to Y not the other way around"
+    resolved_query should restate the prior question with the corrected fact
+    applied (e.g. "What was Acme's FY24 [not FY23] revenue?").
+
+"expansion"
+    The user wants the prior content EXTENDED to additional scope. The prior
+    content is preserved; new retrieval covers the new scope.
+    Examples:
+      • "Now also include FY25"
+      • "Add Microsoft to that comparison"
+      • "And the cost as well"
+      • "Now do the same for the European team"
+    resolved_query should describe ONLY THE NEW SCOPE so retrieval brings
+    back the new chunks; the prior content stays available via the injected
+    prior_chat_context. E.g. for "Now also include FY25" after a FY22-24
+    roadmap, resolved_query = "Product roadmap for FY25".
+
+"comparison"
+    The user wants the prior content RELATED to a different entity or period.
+    The prior message is one side of the comparison; retrieval finds the other.
+    Examples:
+      • "How does that compare to Q3?"
+      • "Same for last year?"
+      • "How does this stack up against the competition?"
+    resolved_query should describe THE OTHER SIDE so retrieval finds it.
+    E.g. after a Q4 summary, "How does that compare to Q3?" → resolved_query
+    = "Q3 financial results and operational summary".
+
 When in doubt, choose "none". Including stale prior-answer prose under the
 wrong framing risks either anchoring on stale facts (reasoning framing applied
 to a topic shift) or substituting unrelated retrieved content (reformat framing
@@ -439,6 +474,48 @@ query: “What about Q4?”
   “retrieval_queries”: [],
   “answer_class”: “factoid”,
   “prior_answer_mode”: “none”
+}
+
+Correction follow-up (user corrects a claim in the prior assistant message)
+chat_history: “Acme's CEO is John Doe, appointed in FY23 per the annual report.”
+query: “Actually the CEO is Jane Smith — John retired last year.”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “Confirm Acme's current CEO is Jane Smith and describe the leadership transition from John Doe”,
+  “sub_queries”: [“Confirm Acme's current CEO is Jane Smith and describe the leadership transition from John Doe”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “narrative”,
+  “prior_answer_mode”: “correction”
+}
+
+Expansion follow-up (extend prior content to additional scope)
+chat_history: “Here is the product roadmap for FY22-FY24: FY22 launched X, Y, Z; FY23 expanded to A, B; FY24 added C and D milestones.”
+query: “Now also include FY25.”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “Product roadmap milestones for FY25”,
+  “sub_queries”: [“Product roadmap milestones for FY25”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “timeline”,
+  “prior_answer_mode”: “expansion”
+}
+
+Comparison follow-up (relate prior content to a different scope)
+chat_history: “Q4 revenue was $850M, up 12% sequentially, with strong performance in cloud services.”
+query: “How does that compare to Q3?”
+
+{
+  “requires_decomposition”: false,
+  “resolved_query”: “Q3 financial results — revenue, sequential growth, segment breakdown”,
+  “sub_queries”: [“Q3 financial results — revenue, sequential growth, segment breakdown”],
+  “requires_retrieval_expansion”: false,
+  “retrieval_queries”: [],
+  “answer_class”: “comparison”,
+  “prior_answer_mode”: “comparison”
 }
 Return ONLY a valid JSON object matching the required schema. No markdown fencing, no commentary.
 CRITICAL JSON RULES:

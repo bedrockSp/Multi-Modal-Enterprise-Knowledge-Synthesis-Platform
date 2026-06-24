@@ -79,6 +79,14 @@ async def query(request: Request, body: QueryRequest):
     AGENT_HISTORY_LIMIT = 6  # last 3 user/agent turns
     agent_history = messages[-AGENT_HISTORY_LIMIT:] if messages else []
 
+    _PRIOR_ANSWER_MODES_WITH_INJECTION = (
+        "reasoning",
+        "reformat",
+        "correction",
+        "expansion",
+        "comparison",
+    )
+
     def _resolve_prior_chat_context(decomp_result, history):
         """
         Layer 1 + 3 chat-context refactor: include the prior user+assistant
@@ -90,7 +98,7 @@ async def query(request: Request, body: QueryRequest):
         if not use_context or not history:
             return []
         mode = getattr(decomp_result, "prior_answer_mode", "none")
-        if mode not in ("reasoning", "reformat"):
+        if mode not in _PRIOR_ANSWER_MODES_WITH_INJECTION:
             return []
         return list(history[-2:])
 
@@ -98,7 +106,7 @@ async def query(request: Request, body: QueryRequest):
         if not use_context:
             return "none"
         mode = getattr(decomp_result, "prior_answer_mode", "none")
-        return mode if mode in ("reasoning", "reformat") else "none"
+        return mode if mode in _PRIOR_ANSWER_MODES_WITH_INJECTION else "none"
     chunks = []
     chunks_used = []
     confidence_scores = []

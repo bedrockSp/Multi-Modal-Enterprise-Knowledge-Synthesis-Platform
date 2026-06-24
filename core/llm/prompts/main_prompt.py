@@ -631,15 +631,19 @@ def main_prompt(
     # `messages` here is the curated prior_chat_context from AgentState — at
     # most one user+assistant pair, populated ONLY when the decomposition LLM
     # decided this is a follow-up that refers to the prior assistant answer.
-    # The framing depends on prior_answer_mode:
-    #   'reasoning' — user wants the system to think more (why?, is that right?).
-    #                 Prior is TOPIC context only; documents are ground truth.
-    #   'reformat'  — user wants the prior answer TRANSFORMED (table, shorter,
-    #                 bullets, translated). Prior IS the primary source content;
-    #                 documents are only for filling gaps or verifying numbers.
+    # The framing depends on prior_answer_mode — each mode tells the LLM a
+    # different thing to do with the prior content and how to use the docs.
     if messages:
-        if prior_answer_mode == "reformat":
-            opener = (
+        framings = {
+            "reasoning": (
+                "PRIOR EXCHANGE (for topical context only — the current question MUST "
+                "be answered from the document evidence below, NOT from the prior "
+                "assistant message). The prior assistant message may contain stale "
+                "facts; verify against the documents before reusing any value.",
+                "END OF PRIOR EXCHANGE. Now answer the CURRENT question using the "
+                "documents below as your primary source.",
+            ),
+            "reformat": (
                 "PRIOR EXCHANGE (this is the SOURCE CONTENT the user wants transformed). "
                 "The user's current question requests a REFORMATTING or RESTATEMENT of the "
                 "prior assistant message — preserve its substance and apply the requested "
@@ -647,23 +651,44 @@ def main_prompt(
                 "documents below are available to FILL GAPS or VERIFY SPECIFIC FACTS, but "
                 "the prior assistant message is the primary content to work from. Do NOT "
                 "substitute different content from the documents that wasn't in the prior "
-                "answer just because it's also relevant."
-            )
-            closer = (
+                "answer just because it's also relevant.",
                 "END OF PRIOR EXCHANGE. Now apply the user's requested transformation "
-                "to the prior assistant content."
-            )
-        else:  # 'reasoning' (default when messages are present)
-            opener = (
-                "PRIOR EXCHANGE (for topical context only — the current question MUST "
-                "be answered from the document evidence below, NOT from the prior "
-                "assistant message). The prior assistant message may contain stale "
-                "facts; verify against the documents before reusing any value."
-            )
-            closer = (
-                "END OF PRIOR EXCHANGE. Now answer the CURRENT question using the "
-                "documents below as your primary source."
-            )
+                "to the prior assistant content.",
+            ),
+            "correction": (
+                "PRIOR EXCHANGE (the user is CORRECTING a claim in the prior assistant "
+                "message). The user's current input identifies an error — treat the "
+                "user's correction as AUTHORITATIVE for the corrected fact and produce "
+                "a revised answer that respects it. Acknowledge the correction explicitly "
+                "in your reply ('You are right — ...'). Use the documents below to expand "
+                "or verify the rest of the answer; if the documents disagree with the "
+                "user's correction, surface the disagreement explicitly and cite the "
+                "document evidence rather than silently overriding the user.",
+                "END OF PRIOR EXCHANGE. Apply the correction and produce a revised answer.",
+            ),
+            "expansion": (
+                "PRIOR EXCHANGE (this content stays — the user wants the SAME analysis "
+                "extended to additional scope). Keep the prior content intact and ADD "
+                "parallel content for the new scope using the documents below. Do not "
+                "rewrite, summarize, or compress what was already said unless the user "
+                "explicitly asked for that. Present the result as an integrated whole "
+                "covering both the original scope (from the prior message) and the new "
+                "scope (from the documents).",
+                "END OF PRIOR EXCHANGE. Preserve the prior content and add the new scope.",
+            ),
+            "comparison": (
+                "PRIOR EXCHANGE (this is ONE SIDE of the comparison the user wants). "
+                "The user is asking you to RELATE the prior assistant content to a "
+                "different entity, period, or scope. The documents below contain the "
+                "OTHER SIDE — retrieve and structure them alongside the prior content "
+                "as a side-by-side comparison (HTML table when 2+ dimensions are "
+                "compared). Preserve specific values from the prior message verbatim; "
+                "do not paraphrase them.",
+                "END OF PRIOR EXCHANGE. Now produce a structured comparison between the "
+                "prior content and the new scope from the documents.",
+            ),
+        }
+        opener, closer = framings.get(prior_answer_mode, framings["reasoning"])
 
         contents.append({"role": "system", "parts": opener})
         for m in messages:
